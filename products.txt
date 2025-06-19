@@ -1,0 +1,50 @@
+1,Freezer,Refrigeration Appliances,1500.00,0
+2,Robot Vacuum,Cleaning Appliances,2500.00,0
+3,Dishwasher,Cleaning Appliances,1500.00,0
+4,Split AC,Air Conditioners,2500.00,0
+5,Mini Fridge,Refrigeration Appliances,800.00,0
+6,Rice Cooker,Kitchen Appliances,500.00,0
+7,Refrigerator,Refrigeration Appliances,4500.00,0
+8,Blender,Kitchen Appliances,400.00,0
+9,Evaporative Cooler,Air Conditioners,600.00,0
+10,Coffee Machine,Kitchen Appliances,950.00,0
+11,Vacuum Cleaner,Cleaning Appliances,1200.00,0
+12,Ice Maker,Refrigeration Appliances,1200.00,0
+13,Bluetooth Speaker,Audio/Video Appliances,350.00,0
+14,Soundbar,Audio/Video Appliances,700.00,0
+15,Smart TV,Audio/Video Appliances,3299.00,0
+16,Microwave Oven,Kitchen Appliances,800.00,0
+17,Steam Cleaner,Cleaning Appliances,900.00,0
+18,Window AC,Air Conditioners,1000.00,0
+19,Washing Machine,Cleaning Appliances,1800.00,0
+20,Air Conditioner,Air Conditioners,3500.00,0
+21,Wine Cooler,Refrigeration Appliances,2000.00,0
+22,Oven,Kitchen Appliances,1100.00,0
+23,Portable AC,Air Conditioners,1800.00,0
+24,Projector,Audio/Video Appliances,2800.00,0
+25,Air Fryer,Kitchen Appliances,120.00,15
+26,Toaster Oven,Kitchen Appliances,85.00,20
+27,Electric Kettle,Kitchen Appliances,45.00,30
+28,Stand Mixer,Kitchen Appliances,350.00,8
+29,Juicer,Kitchen Appliances,180.00,11
+30,Handheld Vacuum,Cleaning Appliances,99.00,22
+31,Steam Mop,Cleaning Appliances,130.00,0
+32,Dehumidifier,Air Conditioners,220.00,14
+33,Tower Fan,Air Conditioners,90.00,25
+34,Gaming Console,Audio/Video Appliances,499.00,4
+35,Headphones,Audio/Video Appliances,250.00,18
+36,Turntable,Audio/Video Appliances,200.00,7
+37,Blu-ray Player,Audio/Video Appliances,80.00,0
+38,Pressure Cooker,Kitchen Appliances,140.00,9
+39,Waffle Maker,Kitchen Appliances,40.00,21
+40,Water Purifier,Kitchen Appliances,250.00,6
+41,Electric Grill,Kitchen Appliances,120.00,14
+42,Bread Maker,Kitchen Appliances,110.00,15
+43,Slow Cooker,Kitchen Appliances,65.00,15
+44,Food Processor,Kitchen Appliances,150.00,10
+45,Window Cleaning Robot,Cleaning Appliances,350.00,8
+46,Carpet Cleaner,Cleaning Appliances,220.00,5
+47,Portable Air Purifier,Air Conditioners,180.00,12
+48,Ceiling Fan,Air Conditioners,130.00,30
+49,Home Theater System,Audio/Video Appliances,650.00,7
+50,DVD Player,Audio/Video Appliances,55.00,0
