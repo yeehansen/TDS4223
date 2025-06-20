@@ -2,6 +2,5 @@ admin,password,admin
 sen,sen123,admin
 sensen123,sensen123,customer
 123,123123,admin
-shaoen,enen,admin
 abc,abc,admin
 ccc,ccc,customer
