@@ -1,1998 +1,2626 @@
 #include <iostream>
-#include <string>
 #include <fstream>
-#include <cstdlib>      // For atoi, atof, system
-#include <cstdio>       // For sprintf
-#include <cctype>       // For tolower, isdigit
-#include <conio.h>      // For _getch()
-#include <cmath>        // For floor
-#include <windows.h>    // For console and color
-#include <stdexcept>    // For standard exceptions
-#include <sstream>      // For stringstream
-#include <iomanip>      // For formatted table UI
-#include <ctime>        // For timestamp in logger
-#include <vector>
+#include <string>
+#include <stdexcept>
+#include <conio.h>
+#include <windows.h>
+#include <cctype>
+#include <cstdlib> 
+#include <limits>
+#include <sstream>
+#include <iomanip>
+#include <ctime>
+#include <direct.h>
 
 using namespace std;
 
-// Forward declarations for all classes and structs
-class HashTable;
-class UserManager;
-class BaseUser;
-class Admin;
-class Customer;
-class ReportGenerator;
-class InventoryReport;
-class SalesReport;
-class ShoppingCart;
-class Logger;
+// ANSI Color Codes
+#define RESET       "\033[0m"
+#define RED         "\033[31m"
+#define GREEN       "\033[32m"
+#define YELLOW      "\033[33m"
+#define LIGHT_BLUE  "\033[94m"
 
-// =================================================================
-// DESIGN & UI (HELPER FUNCTIONS)
-// =================================================================
+// --- FORWARD DECLARATIONS ---
+struct Product;
 
-// --- COLOR CONSTANTS ---
-const int COLOR_DEFAULT = 7;
-const int COLOR_TITLE = 11;     // Light Aqua
-const int COLOR_SUCCESS = 10;   // Light Green
-const int COLOR_ERROR = 12;     // Light Red
-const int COLOR_WARNING = 14;   // Yellow
-const int COLOR_INPUT = 15;     // Bright White
-const int COLOR_HEADER = 13;    // Light Purple
-
-HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
-
-void setColor(int color) {
-    SetConsoleTextAttribute(hConsole, color);
+// --- UTILITY FUNCTIONS ---
+void setColor(const char* color) {
+    cout << color;
 }
 
-void printHeader(const string& title) {
-    system("cls");
-    setColor(COLOR_TITLE);
-    cout << "======================================================================\n";
-    cout << "||        " << left << setw(52) << title << "||\n";
-    cout << "======================================================================\n\n";
-    setColor(COLOR_DEFAULT);
+void resetColor() {
+    cout << RESET;
 }
 
-void printSubHeader(const string& title) {
-    setColor(COLOR_HEADER);
-    cout << "\n--- " << title << " ---\n";
-    setColor(COLOR_DEFAULT);
-}
-
-void pressKeyToContinue() {
-    setColor(COLOR_WARNING);
-    cout << "\n\nPress any key to continue...";
-    _getch();
-    setColor(COLOR_DEFAULT);
-}
-
-// =================================================================
-// UTILITY FUNCTIONS
-// =================================================================
-
-string intToString(int value) {
-    char buffer[50];
-    sprintf(buffer, "%d", value);
-    return string(buffer);
-}
-
-string doubleToString(double value) {
-    char buffer[50];
-    sprintf(buffer, "%.2f", value);
-    return string(buffer);
-}
-
-int getIntegerInput() {
-    string line;
-    int number;
-    while (true) {
-        setColor(COLOR_INPUT);
-        getline(cin, line);
-        setColor(COLOR_DEFAULT);
-
-        if (line.empty()) {
-            continue;
-        }
-
-        stringstream ss(line);
-        if (ss >> number && ss.eof()) {
-            return number;
-        } else {
-            setColor(COLOR_ERROR);
-            cout << "Invalid input. Please enter a valid integer: ";
-        }
+void getConsoleSize(int& width, int& height) {
+    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    if (GetConsoleScreenBufferInfo(hConsole, &csbi)) {
+        width = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+        height = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+    } else {
+        width = 80;
+        height = 25;
     }
 }
 
-
-struct Product {
-    int id;
-    string name;
-    string category;
-    double price;
-    int quantityInStock;
-
-    Product(int prodId = 0, string prodName = "N/A", string prodCat = "Other", double prodPrice = 0.0, int prodQty = 0)
-        : id(prodId), name(prodName), category(prodCat), price(prodPrice), quantityInStock(prodQty) {}
-
-    void display() const {
-        cout << "  ID: " << id << "\n";
-        cout << "  Name: " << name << "\n";
-        cout << "  Category: " << category << "\n";
-        cout << "  Price: $" << fixed << setprecision(2) << price << "\n";
-        cout << "  In Stock: " << quantityInStock << " units" << endl;
+void showLoading() {
+    int console_width, console_height;
+    getConsoleSize(console_width, console_height);
+    int barWidth = 50;
+    string loadingText = "Loading...";
+    string prefix = loadingText + " [";
+    string suffix = "]";
+    int content_width = prefix.length() + barWidth + suffix.length();
+    int horizontal_padding = (console_width > content_width) ? (console_width - content_width) / 2 : 0;
+    int vertical_padding = (console_height > 1) ? (console_height / 2) - 1 : 0;
+    for (int i = 0; i < vertical_padding; ++i) {
+        cout << "\n";
     }
-
-    friend void showProductPriceWithTax(const Product& product);
-};
-
-void showProductPriceWithTax(const Product& product) {
-    setColor(COLOR_WARNING);
-    cout << "Info: Product '" << product.name << "' price with 8% tax is $" 
-         << fixed << setprecision(2) << product.price * 1.08 << endl;
-    setColor(COLOR_DEFAULT);
+    cout << string(horizontal_padding, ' ') + prefix << flush;
+    int total_steps = barWidth;
+    int duration_ms = 2000;
+    int sleep_ms_per_step = (total_steps > 0) ? duration_ms / total_steps : 0;
+    if (sleep_ms_per_step == 0 && total_steps > 0) sleep_ms_per_step = 1;
+    for (int i = 0; i <= total_steps; ++i) {
+        cout << string(i, '\xDB');
+        cout << string(total_steps - i, '\xB0');
+        cout << suffix << flush;
+        cout << "\r" + string(horizontal_padding, ' ') + prefix << flush;
+        if (i < total_steps) {
+            Sleep(sleep_ms_per_step);
+        }
+    }
+    cout << string(total_steps, '\xDB') + suffix << endl;
 }
 
-struct User {
-    string username;
+string getPassword() {
     string password;
-    string role;
-};
-
-
-class Logger {
-private:
-    static Logger* instance;
-    ofstream logFile;
-    string filename;
-
-    Logger(string fname = "system_log.txt") : filename(fname) {
-        logFile.open(filename.c_str(), ios::app);
-        if (!logFile.is_open()) {
-            cerr << "FATAL ERROR: Could not open log file: " << filename << endl;
-        }
-    }
-
-    string getCurrentTimestamp() {
-        time_t now = time(0);
-        char buf[80];
-        strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", localtime(&now));
-        return string(buf);
-    }
-
-public:
-    Logger(const Logger&) = delete;
-    void operator=(const Logger&) = delete;
-
-    static Logger& getInstance() {
-        if (instance == NULL) {
-            instance = new Logger();
-        }
-        return *instance;
-    }
-
-    void log(const string& level, const string& message) {
-        if (logFile.is_open()) {
-            logFile << "[" << getCurrentTimestamp() << "] [" << level << "] " << message << endl;
-        }
-    }
-
-    void logInfo(const string& message) {
-        log("INFO", message);
-    }
-
-    void logWarning(const string& message) {
-        log("WARN", message);
-    }
-
-    void logError(const string& message) {
-        log("ERROR", message);
-    }
-    
-    ~Logger() {
-        if (logFile.is_open()) {
-            logFile.close();
-        }
-    }
-};
-
-Logger* Logger::instance = NULL;
-
-
-
-class HashTable {
-private:
-    Product** table;
-    int capacity;
-    int currentSize;
-    const double HASH_CONSTANT = 0.6180339887; 
-
-    int hash(int key) {
-        if (key < 0) {
-            key = -key;
-        }
-        double temp = key * HASH_CONSTANT;
-        double fractionalPart = temp - static_cast<long>(temp);
-        return static_cast<int>(floor(capacity * fractionalPart));
-    }
-
-public:
-    // =================== MODIFICATION: INCREASED CAPACITY ===================
-    HashTable(int cap = 200) { // Changed default capacity from 50 to 200
-    // =================== END OF MODIFICATION ===================
-        capacity = cap;
-        currentSize = 0;
-        table = new Product*[capacity];
-        for (int i = 0; i < capacity; i++) {
-            table[i] = NULL;
-        }
-    }
-
-    ~HashTable() {
-        for (int i = 0; i < capacity; i++) {
-            if (table[i] != NULL) {
-                delete table[i];
+    char ch;
+    cout << flush;
+    while ((ch = _getch()) != 13 && ch != 10) { // 13 is Enter, 10 is newline
+        if (ch == 8) { // Backspace
+            if (!password.empty()) {
+                password.erase(password.length() - 1);
+                cout << "\b \b" << flush;
             }
+        } else if (ch >= 32 && ch <= 126) {
+            password += ch;
+            cout << '*' << flush;
         }
-        delete[] table;
+    }
+    cout << endl;
+    return password;
+}
+
+int manualMax(int a, int b) {
+    return (a > b) ? a : b;
+}
+
+string intToString(int val) {
+    stringstream ss;
+    ss << val;
+    return ss.str();
+}
+
+// **FIXED**: Replaced strol with manual parsing logic to ensure compatibility.
+int custom_stoi(const string& str, size_t* pos = 0) {
+    if (str.empty()) {
+        throw invalid_argument("stoi: invalid argument (empty string)");
     }
 
-    void add(const Product& product) {
-        if (currentSize >= capacity * 0.7) {
-            cout << "Warning: Hash table is getting full." << endl;
+    long long result = 0;
+    int sign = 1;
+    size_t i = 0;
+
+    // Trim leading whitespace
+    while (i < str.length() && isspace(str[i])) {
+        i++;
+    }
+
+    // Handle sign
+    if (i < str.length() && (str[i] == '+' || str[i] == '-')) {
+        if (str[i] == '-') {
+            sign = -1;
+        }
+        i++;
+    }
+
+    bool hasDigits = false;
+    while (i < str.length() && isdigit(str[i])) {
+        hasDigits = true;
+        int digit = str[i] - '0';
+
+        // Check for overflow before multiplication
+        if (result > (numeric_limits<long long>::max() - digit) / 10) {
+             throw out_of_range("stoi: out of range");
         }
         
-        int index = hash(product.id);
-        int probeCount = 0;
-
-        while (table[index] != NULL && table[index]->id != product.id && probeCount < capacity) {
-            index = (index + 1) % capacity;
-            probeCount++;
-        }
-
-        if (probeCount == capacity) {
-            setColor(COLOR_ERROR);
-            cout << "Error: Hash table is completely full. Cannot add new product.\n";
-            setColor(COLOR_DEFAULT);
-            Logger::getInstance().logError("Hash table is full. Failed to add product ID: " + intToString(product.id));
-            return;
-        }
-
-        if (table[index] == NULL) {
-            table[index] = new Product(product);
-            currentSize++;
-            Logger::getInstance().logInfo("Added new product to catalog: " + product.name + " (ID: " + intToString(product.id) + ")");
-        } else {
-            *(table[index]) = product;
-            Logger::getInstance().logInfo("Updated product in catalog: " + product.name + " (ID: " + intToString(product.id) + ")");
-        }
+        result = result * 10 + digit;
+        i++;
     }
 
-    Product* find(int key) {
-        int index = hash(key);
-        int probeCount = 0;
-        
-        do {
-            if (table[index] != NULL && table[index]->id == key) {
-                return table[index];
-            }
-            index = (index + 1) % capacity;
-            probeCount++;
-        } while (probeCount < capacity && table[index-1 % capacity] != NULL);
-
-        return NULL;
+    if (!hasDigits) {
+        throw invalid_argument("stoi: invalid argument (no digits)");
     }
 
-    bool remove(int key) {
-        Product* allProducts = new Product[currentSize];
-        int count = getAll(allProducts, currentSize);
-        bool found = false;
+    // Check for non-digit characters after the number part
+    if (i < str.length()) {
+        throw invalid_argument("stoi: invalid argument with extra chars");
+    }
 
-        for (int i = 0; i < count; i++) {
-            if (allProducts[i].id == key) {
-                found = true;
+    result *= sign;
+
+    if (result > numeric_limits<int>::max() || result < numeric_limits<int>::min()) {
+        throw out_of_range("stoi: out of range");
+    }
+
+    if (pos) {
+        *pos = i;
+    }
+
+    return static_cast<int>(result);
+}
+
+
+double custom_stod(const string& str, size_t* pos = 0) {
+    stringstream ss(str);
+    double result;
+    ss >> result;
+    if (ss.fail() || !ss.eof()) { // Simplified check
+        throw invalid_argument("stod: invalid argument");
+    }
+    if (pos) {
+        *pos = ss.tellg();
+        if (*pos == (size_t)-1) *pos = str.length();
+    }
+    return result;
+}
+
+string manualToLower(const string& str) {
+    string lower = str;
+    for (size_t i = 0; i < lower.length(); ++i) {
+        lower[i] = static_cast<char>(tolower(static_cast<unsigned char>(lower[i])));
+    }
+    return lower;
+}
+
+size_t manualFind(const string& str, char ch, size_t start_pos = 0) {
+    for (size_t i = start_pos; i < str.length(); ++i) {
+        if (str[i] == ch) {
+            return i;
+        }
+    }
+    return string::npos;
+}
+
+bool manualContains(const string& str, const string& substr) {
+    if (substr.empty()) return true;
+    string lowerStr = manualToLower(str);
+    string lowerSubstr = manualToLower(substr);
+    if (lowerSubstr.length() > lowerStr.length()) return false;
+    for (size_t i = 0; i <= lowerStr.length() - lowerSubstr.length(); ++i) {
+        bool match = true;
+        for (size_t j = 0; j < lowerSubstr.length(); ++j) {
+            if (lowerStr[i + j] != lowerSubstr[j]) {
+                match = false;
                 break;
             }
         }
-        
-        if (!found) {
-            delete[] allProducts;
-            return false;
-        }
+        if (match) return true;
+    }
+    return false;
+}
 
-        for (int i = 0; i < capacity; i++) {
-            if (table[i] != NULL) {
-                delete table[i];
-                table[i] = NULL;
-            }
-        }
-        this->currentSize = 0;
-        
-        for (int i = 0; i < count; i++) {
-            if (allProducts[i].id != key) {
-                add(allProducts[i]);
-            }
-        }
-        delete[] allProducts;
-        Logger::getInstance().logInfo("Removed product from catalog with ID: " + intToString(key));
-        return true;
+bool manualFileContains(const string& filename, const string& search_term) {
+    ifstream file(filename.c_str());
+    if (!file) {
+        return false;
     }
+    string line;
+    string lower_search_term = manualToLower(search_term);
+    while (getline(file, line)) {
+        line.erase(0, line.find_first_not_of(" \t\n\r"));
+        line.erase(line.find_last_not_of(" \t\n\r") + 1);
+        if (!line.empty()) {
+            size_t commaPos = manualFind(line, ',');
+            string storedUsername = (commaPos == string::npos) ? line : line.substr(0, commaPos);
+            storedUsername.erase(0, storedUsername.find_first_not_of(" \t\n\r"));
+            storedUsername.erase(storedUsername.find_last_not_of(" \t\n\r") + 1);
+            if (manualToLower(storedUsername) == lower_search_term) {
+                file.close();
+                return true;
+            }
+        }
+    }
+    file.close();
+    return false;
+}
 
-    int getAll(Product* productsArray, int maxSize) {
-        int count = 0;
-        for (int i = 0; i < capacity && count < maxSize; i++) {
-            if (table[i] != NULL) {
-                productsArray[count++] = *(table[i]);
-            }
-        }
-        return count;
-    }
-    
-    int getSize() const { 
-        return currentSize; 
-    }
+// --- DATA STRUCTURES ---
+
+struct Product {
+    string name;
+    string price;
+    string category;
+    int stock;
+    Product(string n = "", string p = "", string c = "", int s = 0)
+        : name(n), price(p), category(c), stock(s) {}
 };
 
-// --- 3.2 SORTING ALGORITHM (Merge Sort) ---
-void merge(Product arr[], int left, int mid, int right, const string& sortBy, bool ascending) {
-    int n1 = mid - left + 1;
-    int n2 = right - mid;
-
-    Product* L = new Product[n1];
-    Product* R = new Product[n2];
-
-    for (int i = 0; i < n1; i++) {
-        L[i] = arr[left + i];
-    }
-    for (int j = 0; j < n2; j++) {
-        R[j] = arr[mid + 1 + j];
-    }
-
-    int i = 0;
-    int j = 0;
-    int k = left;
-
-    while (i < n1 && j < n2) {
-        bool condition;
-        if (sortBy == "price") {
-            if (ascending == true) {
-                condition = (L[i].price <= R[j].price);
-            } else {
-                condition = (L[i].price >= R[j].price);
-            }
-        } else if (sortBy == "id") {
-            if (ascending == true) {
-                condition = (L[i].id <= R[j].id);
-            } else {
-                condition = (L[i].id >= R[j].id);
-            }
-        } else {
-            if (ascending == true) {
-                condition = (L[i].name <= R[j].name);
-            } else {
-                condition = (L[i].name >= R[j].name);
-            }
-        }
-
-        if (condition) {
-            arr[k] = L[i];
-            i++;
-        } else {
-            arr[k] = R[j];
-            j++;
-        }
-        k++;
-    }
-
-    while (i < n1) {
-        arr[k] = L[i];
-        i++;
-        k++;
-    }
-    while (j < n2) {
-        arr[k] = R[j];
-        j++;
-        k++;
-    }
-
-    delete[] L;
-    delete[] R;
-}
-
-void mergeSort(Product arr[], int left, int right, const string& sortBy, bool ascending) {
-    if (left >= right) {
-        return;
-    }
-    int mid = left + (right - left) / 2;
-    mergeSort(arr, left, mid, sortBy, ascending);
-    mergeSort(arr, mid + 1, right, sortBy, ascending);
-    merge(arr, left, mid, right, sortBy, ascending);
-}
-
-// --- 3.3 SEARCHING ALGORITHM (Binary Search) ---
-Product* binarySearch(Product arr[], int low, int high, int key) {
-    while (low <= high) {
-        int mid = low + (high - low) / 2;
-        if (arr[mid].id == key) {
-            return &arr[mid];
-        }
-        if (arr[mid].id < key) {
-            low = mid + 1;
-        } else {
-            high = mid - 1;
-        }
-    }
-    return NULL;
-}
-
-Product* findProductById_BinarySearch(HashTable& catalog, int productId) {
-    int count = catalog.getSize();
-    if (count == 0) {
-        return NULL;
-    }
-
-    Product* allProducts = new Product[count];
-    catalog.getAll(allProducts, count);
-
-    mergeSort(allProducts, 0, count - 1, "id", true);
-
-    Product* foundInTemp = binarySearch(allProducts, 0, count - 1, productId);
-    
-    delete[] allProducts;
-
-    if (foundInTemp != NULL) {
-        return catalog.find(productId);
-    }
-    
-    return NULL;
-}
-
-
-// --- 3.4 LINKED LIST (for Customer's Shopping Cart) ---
-struct CartItemNode {
+struct ProductNode {
     Product data;
-    int quantity;
-    CartItemNode* next;
-
-    CartItemNode(const Product& prod, int qty) : data(prod), quantity(qty), next(NULL) {}
+    ProductNode* next;
+    ProductNode(const Product& p) : data(p), next(NULL) {}
 };
 
-class ShoppingCart {
+struct CategoryNode {
+    string data;
+    CategoryNode* next;
+    CategoryNode(const string& s) : data(s), next(NULL) {}
+};
+
+
+// --- CLASS ProductList ---
+class ProductList {
 private:
-    CartItemNode* head;
-    int listSize;
+    ProductNode* productHead;
+    int productCount;
+    CategoryNode* categoryHead;
+    int categoryCount;
+
+    void clearProductList() {
+        ProductNode* current = productHead;
+        while (current != NULL) {
+            ProductNode* next = current->next;
+            delete current;
+            current = next;
+        }
+        productHead = NULL;
+        productCount = 0;
+    }
+
+    void clearCategoryList() {
+        CategoryNode* current = categoryHead;
+        while (current != NULL) {
+            CategoryNode* next = current->next;
+            delete current;
+            current = next;
+        }
+        categoryHead = NULL;
+        categoryCount = 0;
+    }
+
+    Product* createProductArrayFromList() const {
+        if (productCount == 0) return NULL;
+        Product* arr = new Product[productCount];
+        ProductNode* current = productHead;
+        int i = 0;
+        while (current != NULL) {
+            arr[i++] = current->data;
+            current = current->next;
+        }
+        return arr;
+    }
+
+    string* createCategoryArrayFromList() const {
+        if (categoryCount == 0) return NULL;
+        string* arr = new string[categoryCount];
+        CategoryNode* current = categoryHead;
+        int i = 0;
+        while (current != NULL) {
+            arr[i++] = current->data;
+            current = current->next;
+        }
+        return arr;
+    }
+
+    void merge(Product* arr, int left, int mid, int right, bool ascending, const string& sortBy) const {
+        int n1 = mid - left + 1;
+        int n2 = right - mid;
+
+        Product* L = new Product[n1];
+        Product* R = new Product[n2];
+
+        for (int i = 0; i < n1; i++) L[i] = arr[left + i];
+        for (int j = 0; j < n2; j++) R[j] = arr[mid + 1 + j];
+
+        int i = 0, j = 0, k = left;
+        while (i < n1 && j < n2) {
+            bool comparison;
+            if (sortBy == "name") {
+                comparison = ascending ? (manualToLower(L[i].name) <= manualToLower(R[j].name)) : (manualToLower(L[i].name) >= manualToLower(R[j].name));
+            } else { // "category"
+                comparison = ascending ? (manualToLower(L[i].category) <= manualToLower(R[j].category)) : (manualToLower(L[i].category) >= manualToLower(R[j].category));
+            }
+
+            if (comparison) {
+                arr[k] = L[i];
+                i++;
+            } else {
+                arr[k] = R[j];
+                j++;
+            }
+            k++;
+        }
+
+        while (i < n1) { arr[k] = L[i]; i++; k++; }
+        while (j < n2) { arr[k] = R[j]; j++; k++; }
+
+        delete[] L;
+        delete[] R;
+    }
+
+    void mergeSort(Product* arr, int left, int right, bool ascending, const string& sortBy) const {
+        if (left >= right) return;
+        int mid = left + (right - left) / 2;
+        mergeSort(arr, left, mid, ascending, sortBy);
+        mergeSort(arr, mid + 1, right, ascending, sortBy);
+        merge(arr, left, mid, right, ascending, sortBy);
+    }
+    
+    void merge(string* arr, int left, int mid, int right, bool ascending) {
+        int n1 = mid - left + 1;
+        int n2 = right - mid;
+
+        string* L = new string[n1];
+        string* R = new string[n2];
+
+        for (int i = 0; i < n1; i++) L[i] = arr[left + i];
+        for (int j = 0; j < n2; j++) R[j] = arr[mid + 1 + j];
+
+        int i = 0, j = 0, k = left;
+        while (i < n1 && j < n2) {
+             bool comparison = ascending ? (manualToLower(L[i]) <= manualToLower(R[j])) : (manualToLower(L[i]) >= manualToLower(R[j]));
+            if (comparison) {
+                arr[k] = L[i];
+                i++;
+            } else {
+                arr[k] = R[j];
+                j++;
+            }
+            k++;
+        }
+
+        while (i < n1) { arr[k] = L[i]; i++; k++; }
+        while (j < n2) { arr[k] = R[j]; j++; k++; }
+        delete[] L;
+        delete[] R;
+    }
+    
+    void mergeSortCategories(string* arr, int left, int right, bool ascending) {
+        if (left >= right) return;
+        int mid = left + (right - left) / 2;
+        mergeSortCategories(arr, left, mid, ascending);
+        mergeSortCategories(arr, mid + 1, right, ascending);
+        merge(arr, left, mid, right, ascending);
+    }
+
+    int binarySearch(const Product* sortedArr, int size, const string& searchTerm) const {
+        if (size == 0) return -1;
+        string lowerSearchTerm = manualToLower(searchTerm);
+        int low = 0;
+        int high = size - 1;
+        while (low <= high) {
+            int mid = low + (high - low) / 2;
+            string lowerMidName = manualToLower(sortedArr[mid].name);
+            if (lowerMidName == lowerSearchTerm) {
+                return mid;
+            } else if (lowerMidName < lowerSearchTerm) {
+                low = mid + 1;
+            } else {
+                high = mid - 1;
+            }
+        }
+        return -1;
+    }
+    
+    int binarySearchCategory(const string* sortedArr, int size, const string& searchTerm) const {
+        if (size == 0) return -1;
+        string lowerSearchTerm = manualToLower(searchTerm);
+        int low = 0;
+        int high = size - 1;
+        while (low <= high) {
+            int mid = low + (high - low) / 2;
+            string lowerMidName = manualToLower(sortedArr[mid]);
+            if (lowerMidName == lowerSearchTerm) {
+                return mid;
+            } else if (lowerMidName < lowerSearchTerm) {
+                low = mid + 1;
+            } else {
+                high = mid - 1;
+            }
+        }
+        return -1;
+    }
+
+    string* getPurchasedProductNames(const string& ordersFilename, int& count) const {
+        ifstream file(ordersFilename.c_str());
+        if (!file) {
+            count = 0;
+            return NULL;
+        }
+        const int initialCapacity = 20;
+        string* tempNames = new string[initialCapacity];
+        int capacity = initialCapacity;
+        count = 0;
+        string line;
+        while (getline(file, line)) {
+            stringstream ss(line);
+            string user, time, name, qty, price;
+            if (getline(ss, user, '\t') && getline(ss, time, '\t') && getline(ss, name, '\t')) {
+                bool found = false;
+                string lowerName = manualToLower(name);
+                for (int i = 0; i < count; ++i) {
+                    if (manualToLower(tempNames[i]) == lowerName) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    if (count == capacity) {
+                        int newCapacity = capacity * 2;
+                        string* newArray = new string[newCapacity];
+                        for (int i = 0; i < count; ++i) newArray[i] = tempNames[i];
+                        delete[] tempNames;
+                        tempNames = newArray;
+                        capacity = newCapacity;
+                    }
+                    tempNames[count++] = name;
+                }
+            }
+        }
+        file.close();
+        return tempNames;
+    }
+
+    bool isProductPurchased(const string& productName, const string* purchasedNames, int count) const {
+        string lowerProductName = manualToLower(productName);
+        for (int i = 0; i < count; i++) {
+            if (manualToLower(purchasedNames[i]) == lowerProductName) {
+                return true;
+            }
+        }
+        return false;
+    }
 
 public:
-    ShoppingCart() : head(NULL), listSize(0) {}
+    ProductList() : productHead(NULL), productCount(0), categoryHead(NULL), categoryCount(0) {}
+    ~ProductList() {
+        clearProductList();
+        clearCategoryList();
+    }
 
-    ~ShoppingCart() {
-        clear();
+    ProductList(const ProductList& other) = delete;
+    ProductList& operator=(const ProductList& other) = delete;
+
+    Product* getSortedProductsArray(const string& sortBy, bool ascending) const {
+        if (productCount == 0) return NULL;
+        Product* arr = createProductArrayFromList();
+        mergeSort(arr, 0, productCount - 1, ascending, sortBy);
+        return arr;
     }
     
-    void addProduct(const Product& newProduct, int quantity) {
-        CartItemNode* current = head;
-        while(current != NULL) {
-            if(current->data.id == newProduct.id) {
-                current->quantity += quantity;
-                return;
+    bool isValidPrice(const string& price) const {
+        if (price.length() < 4 || manualToLower(price.substr(0, 3)) != "rm ") return false;
+        string numPart = price.substr(3);
+        bool hasDecimal = false;
+        bool hasDigit = false;
+        size_t decimalPos = string::npos;
+        for (size_t i = 0; i < numPart.length(); ++i) {
+            char c = numPart[i];
+            if (isdigit(static_cast<unsigned char>(c))) {
+                hasDigit = true;
+            } else if (c == '.') {
+                if (hasDecimal) return false;
+                hasDecimal = true;
+                decimalPos = i;
+            } else {
+                return false;
             }
-            current = current->next;
         }
-
-        CartItemNode* newNode = new CartItemNode(newProduct, quantity);
-        if (head == NULL) {
-            head = newNode;
-        } else {
-            current = head;
-            while (current->next != NULL) {
-                current = current->next;
-            }
-            current->next = newNode;
-        }
-        listSize++;
-    }
-
-    void displayCart() const {
-        if (isEmpty()) {
-            cout << "Your shopping cart is empty.\n";
-            return;
-        }
-        CartItemNode* current = head;
-        int index = 1;
-        double total = 0.0;
-        printSubHeader("Your Shopping Cart");
-        while (current != NULL) {
-            cout << "\n";
-            cout << index++ << ". ";
-            cout << current->data.name << " (ID: " << current->data.id << ")\n";
-            cout << "   Quantity: " << current->quantity << "\n";
-            cout << "   Price per unit: $" << fixed << setprecision(2) << current->data.price << "\n";
-            cout << "   Subtotal: $" << fixed << setprecision(2) << current->data.price * current->quantity << "\n";
-            total += current->data.price * current->quantity;
-            current = current->next;
-        }
-        setColor(COLOR_HEADER);
-        cout << "\n-----------------------------------\n";
-        cout << "Total Cart Value: $" << fixed << setprecision(2) << total << endl;
-        cout << "-----------------------------------\n";
-        setColor(COLOR_DEFAULT);
-    }
-    
-    void clear() {
-        CartItemNode* current = head;
-        while (current != NULL) {
-            CartItemNode* toDelete = current;
-            current = current->next;
-            delete toDelete;
-        }
-        head = NULL;
-        listSize = 0;
-    }
-    
-    bool removeItem(int productId) {
-        if (head == NULL) {
+        if (!hasDigit || !hasDecimal || (numPart.length() - 1 - decimalPos) != 2) return false;
+        try {
+            size_t pos;
+            custom_stod(numPart, &pos);
+            return pos == numPart.length();
+        } catch (...) {
             return false;
         }
-        
-        if (head->data.id == productId) {
-            CartItemNode* toDelete = head;
-            head = head->next;
-            delete toDelete;
-            listSize--;
-            return true;
+    }
+
+    void searchCategory(const string& searchTerm) {
+        system("cls");
+        setColor(LIGHT_BLUE); cout << "\n=== Search Category ===\n"; resetColor();
+        if (searchTerm.empty()) {
+            setColor(RED); cout << "Search term cannot be empty.\n"; resetColor();
+            cout << "\nPress any key to return to menu..."; _getch();
+            return;
         }
-
-        CartItemNode* current = head;
-        while(current->next != NULL) {
-            if (current->next->data.id == productId) {
-                CartItemNode* toDelete = current->next;
-                current->next = current->next->next;
-                delete toDelete;
-                listSize--;
-                return true;
-            }
-            current = current->next;
-        }
-        
-        return false;
-    }
-
-    bool updateQuantity(int productId, int newQuantity) {
-        if (newQuantity <= 0) {
-            return removeItem(productId);
-        }
-
-        CartItemNode* current = head;
-        while(current != NULL) {
-            if(current->data.id == productId) {
-                current->quantity = newQuantity;
-                return true;
-            }
-            current = current->next;
-        }
-        return false;
-    }
-
-    bool isEmpty() const { 
-        return head == NULL; 
-    }
-    int getSize() const { 
-        return listSize; 
-    }
-    CartItemNode* getHead() const { 
-        return head; 
-    }
-};
-
-// =================================================================
-// 5. USER MANAGEMENT & INHERITANCE STRUCTURE
-// =================================================================
-
-class UserManager {
-private:
-    User* users;
-    int userCount;
-    int capacity;
-    string userFile;
-
-    void grow() {
-        capacity *= 2;
-        User* temp = new User[capacity];
-        for (int i = 0; i < userCount; ++i) {
-            temp[i] = users[i];
-        }
-        delete[] users;
-        users = temp;
-    }
-
-public:
-    UserManager(string filename = "users.txt") : userFile(filename) {
-        capacity = 10;
-        userCount = 0;
-        users = new User[capacity];
-        loadUsers();
-    }
-
-    ~UserManager() {
-        saveUsers();
-        delete[] users;
-    }
-
-    void loadUsers() {
-        ifstream inFile(userFile.c_str());
-        if (!inFile) {
-            cout << "User file not found. Creating default admin (admin/admin)...\n";
-            User defaultAdmin = {"admin", "admin", "admin"};
-            addUser(defaultAdmin);
+        if (categoryCount == 0) {
+            setColor(RED); cout << "No categories available to search.\n"; resetColor();
+            cout << "\nPress any key to return to menu..."; _getch();
             return;
         }
 
-        string line;
-        while (getline(inFile, line)) {
-            stringstream ss(line);
-            string uname, pwd, role_str;
-            getline(ss, uname, ',');
-            getline(ss, pwd, ',');
-            getline(ss, role_str);
+        string* tempCategories = createCategoryArrayFromList();
+        mergeSortCategories(tempCategories, 0, categoryCount - 1, true);
 
-            if (!uname.empty()) {
-                User newUser = {uname, pwd, role_str};
-                addUser(newUser);
+        int foundIndex = binarySearchCategory(tempCategories, categoryCount, searchTerm);
+
+        if (foundIndex == -1) {
+            setColor(RED); cout << "No exact category found matching '" << searchTerm << "'.\n"; resetColor();
+        } else {
+            string foundCategoryName = tempCategories[foundIndex];
+            setColor(GREEN); cout << "=== Exact Match Category Found ===\n"; resetColor();
+            int maxNumLength = (int)string("No.").length();
+            int maxCategoryNameLength = (int)string("Category Name").length();
+            maxNumLength = manualMax(maxNumLength, (int)intToString(1).length());
+            maxCategoryNameLength = manualMax(maxCategoryNameLength, (int)foundCategoryName.length());
+            const int COLUMN_PADDING_SPACES = 2;
+            int numColWidth = maxNumLength + COLUMN_PADDING_SPACES;
+            int categoryNameColWidth = maxCategoryNameLength + COLUMN_PADDING_SPACES;
+            string headerLine = "+" + string(numColWidth, '-') + "+" + string(categoryNameColWidth, '-') + "+";
+            cout << headerLine << endl;
+            cout << "|" << left << setw(numColWidth) << " No."
+                 << "|" << left << setw(categoryNameColWidth) << " Category Name"
+                 << "|" << endl;
+            cout << headerLine << endl;
+            cout << "|" << left << setw(numColWidth) << (" " + intToString(1));
+            cout << "|" << left << setw(categoryNameColWidth) << (" " + foundCategoryName);
+            cout << "|" << endl;
+            cout << headerLine << endl;
+            
+            cout << "Enter category ID (1) to view products, or 0 to return: ";
+            string input;
+            int id;
+            getline(cin, input);
+            try {
+                size_t pos;
+                id = custom_stoi(input, &pos);
+            } catch (...) {
+                id = -1; // Invalid input
+            }
+
+            if (id == 1) {
+                system("cls");
+                displayProductNamesByCategory(foundCategoryName);
+            } else {
+                setColor(RED); cout << "Returning to menu.\n"; resetColor();
             }
         }
-        inFile.close();
+        
+        delete[] tempCategories;
+        cout << "\nPress any key to return to menu...";
+        _getch();
     }
 
-    void saveUsers() {
-        ofstream outFile(userFile.c_str());
-        for (int i = 0; i < userCount; ++i) {
-            outFile << users[i].username << "," << users[i].password << "," << users[i].role << endl;
+    void loadCategories(const string& filename) {
+        clearCategoryList();
+
+        ifstream inFile(filename.c_str());
+        if (!inFile) {
+            cerr << "Categories file not found: " << filename << ". Creating default.\n";
+            ofstream outFile(filename.c_str());
+            if (outFile) {
+                outFile << "Uncategorized\n";
+                outFile.close();
+                CategoryNode* newNode = new CategoryNode("Uncategorized");
+                categoryHead = newNode;
+                categoryCount = 1;
+            } else {
+                cerr << "Error: Cannot create default categories file: " << filename << endl;
+                throw runtime_error("Initialization failed: Cannot create categories file.");
+            }
+        } else {
+            string line;
+            while (getline(inFile, line)) {
+                size_t first = line.find_first_not_of(" \t\n\r");
+                if (string::npos != first) {
+                    size_t last = line.find_last_not_of(" \t\n\r");
+                    line = line.substr(first, (last - first + 1));
+                } else {
+                    line = "";
+                }
+                if (!line.empty()) {
+                    CategoryNode* newNode = new CategoryNode(line);
+                    newNode->next = categoryHead;
+                    categoryHead = newNode;
+                    categoryCount++;
+                }
+            }
+            inFile.close();
+            if (categoryCount == 0) {
+                 CategoryNode* newNode = new CategoryNode("Uncategorized");
+                 categoryHead = newNode;
+                 categoryCount = 1;
+                 ofstream outFile(filename.c_str());
+                 if (outFile) {
+                    outFile << "Uncategorized\n";
+                    outFile.close();
+                 }
+            }
+        }
+
+        bool uncategorizedExists = false;
+        CategoryNode* current = categoryHead;
+        while(current != NULL) {
+            if (manualToLower(current->data) == "uncategorized") {
+                uncategorizedExists = true;
+                break;
+            }
+            current = current->next;
+        }
+
+        if (!uncategorizedExists) {
+            cout << "Warning: 'Uncategorized' category not found. Adding it.\n";
+            CategoryNode* newNode = new CategoryNode("Uncategorized");
+            newNode->next = categoryHead;
+            categoryHead = newNode;
+            categoryCount++;
+            saveCategories(filename);
+        }
+    }
+    
+    void saveCategories(const string& filename) {
+        ofstream outFile(filename.c_str(), ios::out | ios::trunc);
+        if (!outFile) {
+             throw runtime_error("Cannot open categories file for writing: " + filename);
+        }
+        
+        string* tempArray = createCategoryArrayFromList();
+        if(tempArray) {
+            mergeSortCategories(tempArray, 0, categoryCount - 1, true);
+            for (int i = 0; i < categoryCount; i++) {
+                outFile << tempArray[i] << endl;
+            }
+            delete[] tempArray;
         }
         outFile.close();
     }
 
-    void addUser(const User& user) {
-        if (userCount == capacity) {
-            grow();
-        }
-        users[userCount++] = user;
-    }
-
-    BaseUser* login(const string& role);
-    void signUp(const string& role);
-
-    friend class Admin;
-};
-
-
-class BaseUser {
-protected:
-    string username;
-    string role;
-    UserManager& userManager;
-    HashTable& productCatalog;
-
-public:
-    BaseUser(string uname, string userRole, UserManager& um, HashTable& pc) 
-        : username(uname), role(userRole), userManager(um), productCatalog(pc) {
-            Logger::getInstance().logInfo("User '" + username + "' logged in as " + role + ".");
-        }
-
-    virtual ~BaseUser() {
-        Logger::getInstance().logInfo("User '" + username + "' logged out.");
-        cout << "\nUser " << username << " logged out successfully.\n";
-    }
-
-    string getUsername() const { 
-        return username; 
-    }
-    string getRole() const { 
-        return role; 
-    }
-
-    virtual void showMenu() = 0;
-    virtual void displayAllRecords() = 0;
-    virtual void searchRecord() = 0;
-    virtual void sortRecords() = 0;
-};
-
-
-class Admin : public BaseUser {
-public:
-    Admin(string uname, UserManager& um, HashTable& pc) : BaseUser(uname, "admin", um, pc) {}
-    
-    void showMenu() override;
-    void displayAllRecords() override;
-    void searchRecord() override;
-    void sortRecords() override;
-    
-    void addProductRecord();
-    void addNewCategory();
-    void editProductRecord();
-    void deleteProductRecord();
-    void viewAllUsers();
-    void generateSalesReport();
-};
-
-
-class Customer : public BaseUser {
-private:
-    ShoppingCart myCart;
-
-public:
-    Customer(string uname, UserManager& um, HashTable& pc) 
-        : BaseUser(uname, "customer", um, pc) {}
-    
-    void showMenu() override;
-    void displayAllRecords() override;
-    void searchRecord() override;
-    void sortRecords() override;
-
-    void addProductToCart();
-    void viewCart();
-    void editCart();
-    void checkout();
-    void viewPurchaseHistory();
-};
-
-// =================================================================
-// 6. REPORT GENERATOR (POLYMORPHISM EXAMPLE)
-// =================================================================
-
-class ReportGenerator {
-protected:
-    string reportContent;
-    string reportFilename;
-public:
-    ReportGenerator(string fname = "reports.txt") : reportFilename(fname) {}
-    virtual ~ReportGenerator() {}
-
-    virtual void generate(const string& username = "") = 0;
-
-    void display() const {
-        printSubHeader("Generated Report");
-        cout << reportContent << endl;
-    }
-    
-    void save() {
-        ofstream outFile(reportFilename.c_str(), ios::app);
-        if(outFile) {
-            outFile << "--- REPORT START [" << __TIME__ << " " << __DATE__ << "] ---\n";
-            outFile << reportContent;
-            outFile << "--- REPORT END ---\n\n";
-            outFile.close();
-            setColor(COLOR_SUCCESS);
-            cout << "Report appended to " << reportFilename << endl;
-            setColor(COLOR_DEFAULT);
-        } else {
-            setColor(COLOR_ERROR);
-            cout << "Error saving report to file.\n";
-            setColor(COLOR_DEFAULT);
-        }
-    }
-};
-
-class InventoryReport : public ReportGenerator {
-private:
-    HashTable& productCatalog;
-public:
-    InventoryReport(HashTable& pc) : productCatalog(pc) {}
-    
-    void generate(const string& username = "") override {
-        stringstream ss;
-        ss << "Inventory Status Report\n";
-        ss << "------------------------------------\n";
-        ss << "Generated for: Admin (" << username << ")\n\n";
-
-        Product allProducts[100];
-        int count = productCatalog.getAll(allProducts, 100);
+    void addCategory(const string& filename) {
+        system("cls");
+        setColor(LIGHT_BLUE); cout << "\n=== Add New Category ===\n"; resetColor();
+        string newCategory;
+        cout << "Enter new category name: ";
+        getline(cin, newCategory);
+        newCategory.erase(0, newCategory.find_first_not_of(" \t\n\r"));
+        newCategory.erase(newCategory.find_last_not_of(" \t\n\r") + 1);
         
-        ss << "Low Stock Products (<= 5 units):\n";
-        bool lowStockFound = false;
-        for (int i = 0; i < count; i++) {
-            if (allProducts[i].quantityInStock <= 5 && allProducts[i].quantityInStock > 0) {
-                ss << "  - ID: " << allProducts[i].id << ", Name: " << allProducts[i].name 
-                   << ", Stock: " << allProducts[i].quantityInStock << "\n";
-                lowStockFound = true;
-            }
-        }
-        if (!lowStockFound) {
-            ss << "  None\n";
-        }
-
-        ss << "\nOut of Stock Products:\n";
-        bool outOfStockFound = false;
-        for (int i = 0; i < count; i++) {
-            if (allProducts[i].quantityInStock == 0) {
-                ss << "  - ID: " << allProducts[i].id << ", Name: " << allProducts[i].name << "\n";
-                outOfStockFound = true;
-            }
-        }
-        if (!outOfStockFound) {
-            ss << "  None\n";
-        }
-
-        reportContent = ss.str();
-    }
-};
-
-class SalesReport : public ReportGenerator {
-public:
-    void generate(const string& username = "") override {
-        stringstream ss;
-        ss << "Overall Sales Report\n";
-        ss << "---------------------------\n";
-        
-        ifstream inFile("purchase_history.txt");
-        if (!inFile) {
-            ss << "No purchase history data found.\n";
-            reportContent = ss.str();
+        if (newCategory.empty()) {
+            setColor(RED); cout << "Category name cannot be empty.\n"; resetColor();
+            cout << "\nPress any key to return..."; _getch();
             return;
         }
-
-        double totalRevenue = 0;
-        int totalItemsSold = 0;
-        string line;
         
-        while (getline(inFile, line)) {
-            stringstream line_ss(line);
-            string user;
-            string prodId;
-            string prodName;
-            string priceStr;
-            string qtyStr;
-            getline(line_ss, user, ',');
-            getline(line_ss, prodId, ',');
-            getline(line_ss, prodName, ',');
-            getline(line_ss, priceStr, ',');
-            getline(line_ss, qtyStr, ',');
-            
-            double price = atof(priceStr.c_str());
-            int qty = atoi(qtyStr.c_str());
-            totalRevenue += price * qty;
-            totalItemsSold += qty;
-        }
-        inFile.close();
-
-        ss << "Summary of All Sales:\n";
-        ss << "  Total Items Sold: " << totalItemsSold << "\n";
-        ss << "  Total Revenue Generated: $" << fixed << setprecision(2) << totalRevenue << "\n";
-
-        reportContent = ss.str();
-    }
-};
-
-// =================================================================
-// 7. CLASS METHOD IMPLEMENTATIONS
-// =================================================================
-
-BaseUser* UserManager::login(const string& expectedRole) {
-    if (expectedRole == "admin") {
-        printHeader("Admin Login");
-    } else {
-        printHeader("Customer Login");
-    }
-
-    string inputUsername;
-    string inputPassword;
-
-    for (int attempts = 0; attempts < 3; ++attempts) {
-        cout << "Enter Username: ";
-        cin >> inputUsername;
-        cout << "Enter Password: ";
-        
-        setColor(COLOR_INPUT);
-        inputPassword = "";
-        char ch;
-        while((ch = _getch()) != '\r') {
-            if(ch == '\b') { 
-                if(!inputPassword.empty()) {
-                    inputPassword.erase(inputPassword.length() - 1);
-                    cout << "\b \b";
-                }
-            } else {
-                inputPassword += ch;
-                cout << '*';
-            }
-        }
-        cout << endl;
-        setColor(COLOR_DEFAULT);
-
-        for (int i = 0; i < userCount; ++i) {
-            if (users[i].username == inputUsername && users[i].password == inputPassword) {
-                if(users[i].role == expectedRole) {
-                    setColor(COLOR_SUCCESS);
-                    cout << "\n";
-                    cout << "Login successful! Welcome " << users[i].username << ".\n";
-                    setColor(COLOR_DEFAULT);
-                    pressKeyToContinue();
-                    
-                    extern HashTable productCatalog;
-                    if (expectedRole == "admin") {
-                        return new Admin(inputUsername, *this, productCatalog);
-                    } else {
-                        return new Customer(inputUsername, *this, productCatalog);
-                    }
-                } else {
-                    setColor(COLOR_ERROR);
-                    cout << "\n";
-                    cout << "Access Denied: You have " << users[i].role << " credentials, not " << expectedRole << ".\n";
-                    setColor(COLOR_DEFAULT);
-                    pressKeyToContinue();
-                    return NULL;
-                }
-            }
-        }
-
-        setColor(COLOR_ERROR);
-        cout << "\n";
-        cout << "Invalid credentials. You have " << 2 - attempts << " attempts left.\n";
-        setColor(COLOR_DEFAULT);
-    }
-
-    cout << "\n";
-    cout << "Login failed after 3 attempts. Returning to main menu.\n";
-    Logger::getInstance().logWarning("Failed login attempt for role: " + expectedRole);
-    pressKeyToContinue();
-    return NULL;
-}
-
-void UserManager::signUp(const string& roleToAssign) {
-    if (roleToAssign == "admin") {
-        printHeader("New Admin Registration");
-    } else {
-        printHeader("New Customer Registration");
-    }
-
-    string newUsername;
-    string newPassword;
-    string confirmPassword;
-    
-    if (roleToAssign == "admin") {
-        cout << "Enter new Admin username: ";
-    } else {
-        cout << "Enter new Customer username: ";
-    }
-    cin >> newUsername;
-
-    for (int i = 0; i < userCount; ++i) {
-        if (users[i].username == newUsername) {
-            setColor(COLOR_ERROR);
-            cout << "Username '" << newUsername << "' already exists. Please choose another.\n";
-            setColor(COLOR_DEFAULT);
-            Logger::getInstance().logWarning("Sign up failed: Username " + newUsername + " already exists.");
-            pressKeyToContinue();
-            return;
-        }
-    }
-    
-    cout << "Enter new password: ";
-    cin >> newPassword;
-    cout << "Confirm password: ";
-    cin >> confirmPassword;
-
-    if (newPassword != confirmPassword) {
-        setColor(COLOR_ERROR);
-        cout << "Passwords do not match. Registration failed.\n";
-        setColor(COLOR_DEFAULT);
-        Logger::getInstance().logWarning("Sign up failed for " + newUsername + ": Passwords did not match.");
-        pressKeyToContinue();
-        return;
-    }
-
-    User newUser = {newUsername, newPassword, roleToAssign};
-    addUser(newUser);
-    saveUsers();
-    
-    setColor(COLOR_SUCCESS);
-    cout << "\n";
-    if (roleToAssign == "admin") {
-        cout << "Registration for Admin '" << newUsername << "' successful!\n";
-    } else {
-        cout << "Registration for Customer '" << newUsername << "' successful!\n";
-    }
-    setColor(COLOR_DEFAULT);
-    Logger::getInstance().logInfo("New user registered: " + newUsername + " as " + roleToAssign);
-    pressKeyToContinue();
-}
-
-void Admin::showMenu() {
-    int choice;
-    do {
-        printHeader("Admin Menu | Welcome, " + username);
-        cout << "1. Display Records (Products/Users)\n";
-        cout << "2. Search for a Product\n";
-        cout << "3. Sort and Display Products\n";
-        cout << "4. Add New Product\n";
-        cout << "5. Add New Category\n";
-        cout << "6. Edit Product Details\n";
-        cout << "7. Delete a Product\n";
-        cout << "8. Generate Inventory & Sales Reports\n";
-        cout << "0. Logout\n";
-        cout << "\n";
-        cout << "Enter your choice: ";
-        
-        cin.clear();
-        fflush(stdin);
-        choice = getIntegerInput();
-
-        try {
-            switch (choice) {
-                case 1: 
-                    displayAllRecords(); 
-                    break;
-                case 2: 
-                    searchRecord(); 
-                    break;
-                case 3: 
-                    sortRecords(); 
-                    break;
-                case 4: 
-                    addProductRecord(); 
-                    break;
-                case 5:
-                    addNewCategory();
-                    break;
-                case 6:
-                    editProductRecord(); 
-                    break;
-                case 7:
-                    deleteProductRecord(); 
-                    break;
-                case 8:
-                    generateSalesReport(); 
-                    break;
-                case 0: 
-                    break;
-                default:
-                    throw invalid_argument("Invalid choice. Please enter a number between 0 and 8.");
-            }
-        }
-        catch (const exception& e) {
-            setColor(COLOR_ERROR);
-            cout << "Error: " << e.what() << endl;
-            setColor(COLOR_DEFAULT);
-            Logger::getInstance().logError("Exception in Admin Menu: " + string(e.what()));
-            pressKeyToContinue();
-        }
-    } while (choice != 0);
-}
-
-void displayProductTable(Product arr[], int count) {
-    int totalWidth = 90; 
-    setColor(COLOR_HEADER);
-    cout << left;
-    cout << string(totalWidth, '=') << endl;
-    cout << setw(5) << "ID";
-    cout << setw(30) << "Name";
-    cout << setw(25) << "Category";
-    cout << setw(15) << "Price";
-    cout << setw(10) << "In Stock" << endl;
-    cout << string(totalWidth, '-') << endl;
-    setColor(COLOR_DEFAULT);
-
-    for (int i = 0; i < count; i++) {
-        if (arr[i].quantityInStock <= 5 && arr[i].quantityInStock > 0) {
-            setColor(COLOR_WARNING);
-        } else if (arr[i].quantityInStock == 0) {
-            setColor(COLOR_ERROR);
-        }
-
-        stringstream priceStream;
-        priceStream << "$" << fixed << setprecision(2) << arr[i].price;
-
-        cout << setw(5) << arr[i].id;
-        cout << setw(30) << arr[i].name;
-        cout << setw(25) << arr[i].category;
-        cout << setw(15) << priceStream.str();
-        cout << setw(10) << arr[i].quantityInStock << endl;
-
-        setColor(COLOR_DEFAULT);
-    }
-    setColor(COLOR_HEADER);
-    cout << string(totalWidth, '=') << endl;
-    setColor(COLOR_DEFAULT);
-}
-
-
-void Admin::displayAllRecords() {
-    printHeader("Display Records");
-    cout << "1. All Products in Catalog\n";
-    cout << "2. All Registered Users\n";
-    cout << "Enter choice: ";
-    int choice = getIntegerInput();
-
-    if (choice == 1) {
-        printSubHeader("Full Product Catalog");
-        Product allProducts[100];
-        int count = productCatalog.getAll(allProducts, 100);
-        if (count == 0) {
-            cout << "No products in the catalog.\n";
-        } else {
-            displayProductTable(allProducts, count);
-        }
-    } else if (choice == 2) {
-        viewAllUsers();
-    } else {
-        setColor(COLOR_ERROR);
-        cout << "Invalid choice.\n";
-        setColor(COLOR_DEFAULT);
-    }
-    pressKeyToContinue();
-}
-
-void Admin::viewAllUsers(){
-    printSubHeader("All Registered Users");
-    int totalWidth = 50;
-    setColor(COLOR_HEADER);
-    cout << string(totalWidth, '=') << endl;
-    cout << left << setw(25) << "Username" << setw(25) << "Role" << endl;
-    cout << string(totalWidth, '-') << endl;
-    setColor(COLOR_DEFAULT);
-    for(int i = 0; i < userManager.userCount; ++i) {
-        cout << left << setw(25) << userManager.users[i].username;
-        cout << setw(25) << userManager.users[i].role << endl;
-    }
-    setColor(COLOR_HEADER);
-    cout << string(totalWidth, '=') << endl;
-    setColor(COLOR_DEFAULT);
-}
-
-void Admin::searchRecord() {
-    printHeader("Search for a Product");
-    cout << "Enter the ID of the product to search for: ";
-    int id = getIntegerInput();
-
-    Product* foundProduct = findProductById_BinarySearch(productCatalog, id);
-
-    if(foundProduct) {
-        setColor(COLOR_SUCCESS);
-        cout << "\nProduct Found:\n";
-        setColor(COLOR_DEFAULT);
-        foundProduct->display();
-        showProductPriceWithTax(*foundProduct);
-    } else {
-        setColor(COLOR_ERROR);
-        cout << "\nProduct with ID " << id << " not found in the catalog.\n";
-        setColor(COLOR_DEFAULT);
-    }
-    pressKeyToContinue();
-}
-
-void Admin::sortRecords() {
-    printHeader("Sort Products");
-    Product allProducts[100];
-    int count = productCatalog.getAll(allProducts, 100);
-    if (count == 0) {
-        cout << "No products to sort.\n";
-        pressKeyToContinue();
-        return;
-    }
-
-    cout << "Sort by:\n";
-    cout << "1. Price\n";
-    cout << "2. Name\n";
-    cout << "3. ID\n";
-    cout << "Enter choice: ";
-    int sortChoice = getIntegerInput();
-    
-    cout << "Order:\n";
-    cout << "1. Ascending\n";
-    cout << "2. Descending\n";
-    cout << "Enter choice: ";
-    int orderChoice = getIntegerInput();
-
-    string sortByCriteria;
-    switch (sortChoice) {
-        case 1:
-            sortByCriteria = "price";
-            break;
-        case 2:
-            sortByCriteria = "name";
-            break;
-        case 3:
-            sortByCriteria = "id";
-            break;
-        default:
-            cout << "Invalid sort choice. Defaulting to sort by ID.\n";
-            sortByCriteria = "id";
-            break;
-    }
-    
-    bool isAscending;
-    if (orderChoice == 1) {
-        isAscending = true;
-    } else {
-        isAscending = false;
-    }
-
-    mergeSort(allProducts, 0, count - 1, sortByCriteria, isAscending);
-    
-    printSubHeader("Sorted Product List");
-    displayProductTable(allProducts, count);
-    pressKeyToContinue();
-}
-
-// =================== MODIFICATION: GLOBAL CATEGORY LIST ===================
-vector<string> categories;
-// =================== END OF MODIFICATION ===================
-
-void Admin::addProductRecord() {
-    printHeader("Add New Product");
-    int id;
-    int quantity;
-    string name;
-    string category;
-    double price;
-
-    if (categories.empty()) {
-        setColor(COLOR_ERROR);
-        cout << "No categories exist. Please add a category first.\n";
-        setColor(COLOR_DEFAULT);
-        pressKeyToContinue();
-        return;
-    }
-
-    cout << "Enter Product ID: ";
-    id = getIntegerInput();
-
-    if(findProductById_BinarySearch(productCatalog, id) != NULL){
-        setColor(COLOR_ERROR);
-        cout << "Error: A product with ID " << id << " already exists.\n";
-        setColor(COLOR_DEFAULT);
-        pressKeyToContinue();
-        return;
-    }
-
-    cout << "Enter Product Name: "; 
-    getline(cin, name);
-
-    printSubHeader("Select a Category");
-    for (size_t i = 0; i < categories.size(); ++i) {
-        cout << i + 1 << ". " << categories[i] << endl;
-    }
-    cout << "Enter category number: ";
-    int categoryChoice = getIntegerInput();
-
-    if (categoryChoice < 1 || categoryChoice > categories.size()) {
-        setColor(COLOR_ERROR);
-        cout << "Invalid category selection.\n";
-        setColor(COLOR_DEFAULT);
-        pressKeyToContinue();
-        return;
-    }
-    category = categories[categoryChoice - 1];
-
-    cout << "Enter Price: $";
-    string priceStr;
-    getline(cin, priceStr);
-    price = atof(priceStr.c_str());
-
-    cout << "Enter Initial Stock Quantity: "; 
-    quantity = getIntegerInput();
-
-    Product newProduct(id, name, category, price, quantity);
-    productCatalog.add(newProduct);
-
-    setColor(COLOR_SUCCESS);
-    cout << "\n";
-    cout << "Product '" << name << "' added successfully to the catalog.\n";
-    setColor(COLOR_DEFAULT);
-    pressKeyToContinue();
-}
-
-void saveCategoriesToFile() {
-    ofstream outFile("categories.txt");
-    if (!outFile) {
-        Logger::getInstance().logError("Could not open categories.txt for writing.");
-        return;
-    }
-    for (size_t i = 0; i < categories.size(); ++i) {
-        outFile << categories[i] << endl;
-    }
-    outFile.close();
-}
-
-void Admin::addNewCategory() {
-    printHeader("Add New Category");
-
-    string newCategory;
-    cout << "Enter the name for the new category: ";
-    getline(cin, newCategory);
-
-    if (newCategory.empty()) {
-        setColor(COLOR_ERROR);
-        cout << "Category name cannot be empty.\n";
-        setColor(COLOR_DEFAULT);
-        pressKeyToContinue();
-        return;
-    }
-
-    for (size_t i = 0; i < categories.size(); ++i) {
-        if (categories[i] == newCategory) {
-            setColor(COLOR_ERROR);
-            cout << "Category '" << newCategory << "' already exists.\n";
-            setColor(COLOR_DEFAULT);
-            pressKeyToContinue();
-            return;
-        }
-    }
-
-    categories.push_back(newCategory);
-    saveCategoriesToFile();
-
-    setColor(COLOR_SUCCESS);
-    cout << "\nCategory '" << newCategory << "' added successfully.\n";
-    setColor(COLOR_DEFAULT);
-    Logger::getInstance().logInfo("Admin " + username + " added new category: " + newCategory);
-    pressKeyToContinue();
-}
-
-void Admin::editProductRecord() {
-    printHeader("Edit Product Details");
-    cout << "Enter the ID of the product to edit: ";
-    int id = getIntegerInput();
-
-    Product* productToEdit = findProductById_BinarySearch(productCatalog, id);
-
-    if (!productToEdit) {
-        setColor(COLOR_ERROR);
-        cout << "Product with ID " << id << " not found.\n";
-        setColor(COLOR_DEFAULT);
-        pressKeyToContinue();
-        return;
-    }
-
-    cout << "\n";
-    cout << "Editing Product: " << productToEdit->name << "\n";
-    cout << "Press Enter to keep the current value.\n";
-
-    string input;
-    cout << "Enter New Name (current: " << productToEdit->name << "): ";
-    getline(cin, input);
-    if (!input.empty()) {
-        productToEdit->name = input;
-    }
-
-    cout << "Select New Category (current: " << productToEdit->category << "). Press Enter to skip.\n";
-    for (size_t i = 0; i < categories.size(); ++i) {
-        cout << i + 1 << ". " << categories[i] << endl;
-    }
-    cout << "Enter category number (or just press Enter to keep current): ";
-    getline(cin, input);
-    if (!input.empty()) {
-        int categoryChoice = atoi(input.c_str());
-        if (categoryChoice >= 1 && categoryChoice <= categories.size()) {
-            productToEdit->category = categories[categoryChoice - 1];
-        } else {
-            cout << "Invalid selection. Category not changed.\n";
-        }
-    }
-    
-    cout << "Enter New Price (current: " << productToEdit->price << "): $";
-    getline(cin, input);
-    if (!input.empty()) {
-        productToEdit->price = atof(input.c_str());
-    }
-    
-    cout << "Enter New Stock (current: " << productToEdit->quantityInStock << "): ";
-    getline(cin, input);
-    if (!input.empty()) {
-        productToEdit->quantityInStock = atoi(input.c_str());
-    }
-
-    productCatalog.add(*productToEdit); 
-
-    setColor(COLOR_SUCCESS);
-    cout << "\n";
-    cout << "Product details updated successfully.\n";
-    setColor(COLOR_DEFAULT);
-    pressKeyToContinue();
-}
-
-void Admin::deleteProductRecord() {
-    printHeader("Delete Product");
-    cout << "Enter the ID of the product to delete: ";
-    int id = getIntegerInput();
-
-    if (productCatalog.remove(id)) {
-        setColor(COLOR_SUCCESS);
-        cout << "Product with ID " << id << " has been deleted.\n";
-        setColor(COLOR_DEFAULT);
-    } else {
-        setColor(COLOR_ERROR);
-        cout << "Product with ID " << id << " not found.\n";
-        setColor(COLOR_DEFAULT);
-    }
-    pressKeyToContinue();
-}
-
-void Admin::generateSalesReport() {
-    printHeader("Generate Reports");
-    cout << "Which report would you like to generate?\n";
-    cout << "1. Inventory Status Report\n";
-    cout << "2. Overall Sales Report\n";
-    cout << "Enter choice: ";
-    int choice = getIntegerInput();
-
-    if (choice == 1) {
-        InventoryReport report(productCatalog);
-        report.generate(username);
-        report.display();
-        cout << "\nDo you want to save this report? (y/n): ";
-        char saveChoice;
-        cin >> saveChoice;
-        if(tolower(saveChoice) == 'y') {
-            report.save();
-        }
-    } else if (choice == 2) {
-        SalesReport report;
-        report.generate();
-        report.display();
-        cout << "\nDo you want to save this report? (y/n): ";
-        char saveChoice;
-        cin >> saveChoice;
-        if(tolower(saveChoice) == 'y') {
-            report.save();
-        }
-    } else {
-        cout << "Invalid choice.\n";
-    }
-
-    pressKeyToContinue();
-}
-
-void Customer::showMenu() {
-    int choice;
-    do {
-        printHeader("Customer Menu | Welcome, " + username);
-        cout << "1. Add Products to Cart\n";
-        cout << "2. View Shopping Cart\n";
-        cout << "3. Edit Shopping Cart\n";
-        cout << "4. Confirm Order / Checkout\n";
-        cout << "5. Search for Products by Name\n";
-        cout << "6. Sort and Browse Products\n";
-        cout << "7. View My Purchase History\n";
-        cout << "0. Logout\n";
-        cout << "\n";
-        cout << "Enter your choice: ";
-
-        cin.clear();
-        fflush(stdin);
-        choice = getIntegerInput();
-
-        try {
-            switch (choice) {
-                case 1: 
-                    addProductToCart(); 
-                    break;
-                case 2: 
-                    viewCart(); 
-                    break;
-                case 3:
-                    editCart();
-                    break;
-                case 4: 
-                    checkout(); 
-                    break;
-                case 5: 
-                    searchRecord(); 
-                    break;
-                case 6:
-                    sortRecords(); 
-                    break;
-                case 7:
-                    viewPurchaseHistory(); 
-                    break;
-                case 0: 
-                    break;
-                default:
-                    throw invalid_argument("Invalid choice. Please enter a number between 0 and 7.");
-            }
-        }
-        catch (const exception& e) {
-            setColor(COLOR_ERROR);
-            cout << "Error: " << e.what() << endl;
-            setColor(COLOR_DEFAULT);
-            Logger::getInstance().logError("Exception in Customer Menu: " + string(e.what()));
-            pressKeyToContinue();
-        }
-    } while (choice != 0);
-}
-
-void Customer::addProductToCart() {
-    printHeader("Add Products to Cart");
-    printSubHeader("Available Products");
-    
-    Product allProducts[100];
-    int count = productCatalog.getAll(allProducts, 100);
-    if(count == 0){
-        cout << "Sorry, no products are available in the catalog right now.\n";
-        pressKeyToContinue();
-        return;
-    }
-    
-    mergeSort(allProducts, 0, count-1, "id", true);
-    displayProductTable(allProducts, count);
-    
-    cout << "\n";
-    cout << "Enter the ID of the product you want to add (0 to back to menu): ";
-    int id = getIntegerInput();
-    if(id == 0) {
-        return;
-    }
-
-    Product* productToAdd = findProductById_BinarySearch(productCatalog, id);
-
-    if(productToAdd) {
-        cout << "Enter quantity for '" << productToAdd->name << "': ";
-        int qty = getIntegerInput();
-
-        if (qty > 0 && qty <= productToAdd->quantityInStock) {
-            myCart.addProduct(*productToAdd, qty);
-            setColor(COLOR_SUCCESS);
-            cout << "\n";
-            cout << qty << " unit(s) of '" << productToAdd->name << "' added to your cart.\n";
-            setColor(COLOR_DEFAULT);
-        } else if (qty > productToAdd->quantityInStock) {
-            setColor(COLOR_ERROR);
-            cout << "Sorry, the requested quantity (" << qty 
-                 << ") exceeds the available stock (" << productToAdd->quantityInStock << ").\n";
-            setColor(COLOR_DEFAULT);
-        } else {
-            setColor(COLOR_ERROR);
-            cout << "Invalid quantity.\n";
-            setColor(COLOR_DEFAULT);
-        }
-    } else {
-        setColor(COLOR_ERROR);
-        cout << "\nProduct with ID " << id << " not found.\n";
-        setColor(COLOR_DEFAULT);
-    }
-    pressKeyToContinue();
-}
-
-void Customer::viewCart(){
-    printHeader("My Shopping Cart");
-    myCart.displayCart();
-    pressKeyToContinue();
-}
-
-void Customer::editCart() {
-    int choice;
-    do {
-        printHeader("Edit Shopping Cart");
-
-        if (myCart.isEmpty()) {
-            cout << "Your cart is empty. Nothing to edit.\n";
-            pressKeyToContinue();
-            return;
-        }
-
-        myCart.displayCart();
-
-        cout << "\n";
-        printSubHeader("Edit Options");
-        cout << "1. Update Item Quantity\n";
-        cout << "2. Remove Item from Cart\n";
-        cout << "0. Back to Customer Menu\n";
-        cout << "\nEnter your choice: ";
-
-        choice = getIntegerInput();
-
-        if (choice == 1) {
-            cout << "\nEnter the ID of the product to update: ";
-            int id = getIntegerInput();
-
-            Product* productInCatalog = findProductById_BinarySearch(productCatalog, id);
-
-            if (!productInCatalog) {
-                setColor(COLOR_ERROR);
-                cout << "This product ID does not exist in the main catalog.\n";
-                setColor(COLOR_DEFAULT);
-                pressKeyToContinue();
-                continue;
-            }
-
-            cout << "Enter the new quantity (enter 0 to remove): ";
-            int newQty = getIntegerInput();
-
-            if (newQty > productInCatalog->quantityInStock) {
-                setColor(COLOR_ERROR);
-                cout << "Error: New quantity (" << newQty 
-                     << ") exceeds available stock (" << productInCatalog->quantityInStock << ").\n";
-                setColor(COLOR_DEFAULT);
-            } else {
-                if(myCart.updateQuantity(id, newQty)) {
-                    setColor(COLOR_SUCCESS);
-                    cout << "Cart updated successfully.\n";
-                    setColor(COLOR_DEFAULT);
-                } else {
-                    setColor(COLOR_ERROR);
-                    cout << "Product with ID " << id << " not found in your cart.\n";
-                    setColor(COLOR_DEFAULT);
-                }
-            }
-            pressKeyToContinue();
-        }
-        else if (choice == 2) {
-            cout << "\nEnter the ID of the product to remove: ";
-            int id = getIntegerInput();
-            if (myCart.removeItem(id)) {
-                setColor(COLOR_SUCCESS);
-                cout << "Product removed from cart successfully.\n";
-                setColor(COLOR_DEFAULT);
-            } else {
-                setColor(COLOR_ERROR);
-                cout << "Product with ID " << id << " not found in your cart.\n";
-                setColor(COLOR_DEFAULT);
-            }
-            pressKeyToContinue();
-        }
-        else if (choice != 0) {
-            setColor(COLOR_ERROR);
-            cout << "Invalid choice. Please try again.\n";
-            setColor(COLOR_DEFAULT);
-            pressKeyToContinue();
-        }
-
-    } while (choice != 0);
-}
-
-void Customer::checkout() {
-    printHeader("Checkout");
-    if (myCart.isEmpty()) {
-        cout << "Your cart is empty. Nothing to check out.\n";
-        pressKeyToContinue();
-        return;
-    }
-
-    myCart.displayCart();
-    cout << "\n";
-    cout << "Do you want to confirm this purchase? (y/n): ";
-    char confirm;
-    cin >> confirm;
-    cin.ignore(1000, '\n'); // Clear buffer after char input
-
-    if (tolower(confirm) == 'y') {
-        CartItemNode* current = myCart.getHead();
-        ofstream historyFile("purchase_history.txt", ios::app);
-
+        bool exists = false;
+        CategoryNode* current = categoryHead;
         while(current != NULL) {
-            Product* productInStock = findProductById_BinarySearch(productCatalog, current->data.id);
-            if(productInStock && productInStock->quantityInStock >= current->quantity) {
-                productInStock->quantityInStock -= current->quantity;
-                historyFile << username << "," << current->data.id << "," << current->data.name << "," 
-                            << current->data.price << "," << current->quantity << endl;
+            if (manualToLower(current->data) == manualToLower(newCategory)) {
+                exists = true;
+                break;
             }
             current = current->next;
         }
-        historyFile.close();
+
+        if (exists) {
+            setColor(RED); cout << "Category '" << newCategory << "' already exists.\n"; resetColor();
+            cout << "\nPress any key to return..."; _getch();
+            return;
+        }
         
-        myCart.clear();
-        setColor(COLOR_SUCCESS);
-        cout << "\n";
-        cout << "Purchase successful! Thank you for your order.\n";
-        setColor(COLOR_DEFAULT);
-        Logger::getInstance().logInfo("User " + username + " completed a purchase.");
-
-    } else {
-        cout << "Purchase cancelled.\n";
-        Logger::getInstance().logInfo("User " + username + " cancelled checkout.");
-    }
-
-    pressKeyToContinue();
-}
-
-void Customer::viewPurchaseHistory() {
-    printHeader("My Purchase History");
-    ifstream inFile("purchase_history.txt");
-    if (!inFile) {
-        cout << "No purchase history found.\n";
-        pressKeyToContinue();
-        return;
-    }
-    
-    string line;
-    bool foundRecords = false;
-    printSubHeader("Items you have purchased:");
-    while(getline(inFile, line)) {
-        stringstream ss(line);
-        string user, prodId, prodName, priceStr, qtyStr;
-        getline(ss, user, ',');
-        if (user == username) {
-            foundRecords = true;
-            getline(ss, prodId, ',');
-            getline(ss, prodName, ',');
-            getline(ss, priceStr, ',');
-            getline(ss, qtyStr, ',');
-            cout << " - Product: " << prodName << " (ID: " << prodId << "), Quantity: " << qtyStr << ", Price: $" << priceStr << endl;
+        CategoryNode* newNode = new CategoryNode(newCategory);
+        newNode->next = categoryHead;
+        categoryHead = newNode;
+        categoryCount++;
+        
+        try {
+            saveCategories(filename);
+            setColor(GREEN); cout << "Category '" << newCategory << "' added successfully.\n"; resetColor();
+            Sleep(1000);
+            sortAndDisplayCategories();
+        } catch (const runtime_error& e) {
+            cerr << "Error saving categories: " << e.what() << endl;
+            CategoryNode* toDelete = categoryHead;
+            categoryHead = categoryHead->next;
+            delete toDelete;
+            categoryCount--;
+            setColor(YELLOW); cout << "Warning: Category add failed to save. No changes made.\n"; resetColor();
+            cout << "\nPress any key to return...";
+            _getch();
         }
     }
-    if(!foundRecords) {
-        cout << "You have not made any purchases yet.\n";
-    }
-    inFile.close();
-    pressKeyToContinue();
-}
 
-void Customer::searchRecord() {
-    printHeader("Search Product Catalog by Name");
-    Product allProducts[100];
-    int count = productCatalog.getAll(allProducts, 100);
-    if (count == 0) {
-        cout << "Product catalog is empty. Nothing to search.\n";
-        pressKeyToContinue();
-        return;
-    }
+    void deleteCategory(const string& categoriesFilename, const string& productsFilename) {
+        system("cls");
+        setColor(LIGHT_BLUE); cout << "\n=== Delete Category ===\n"; resetColor();
 
-    string searchTerm;
-    cout << "Enter a product name or the first letter(s) to search for: ";
-    cin.clear();
-    fflush(stdin);
-    getline(cin, searchTerm);
+        string* displayableCategories = new string[categoryCount];
+        int displayableCategoryCount = 0;
+        CategoryNode* currentCat = categoryHead;
+        while (currentCat) {
+            if (manualToLower(currentCat->data) != "uncategorized") {
+                displayableCategories[displayableCategoryCount++] = currentCat->data;
+            }
+            currentCat = currentCat->next;
+        }
 
-    if (searchTerm.empty()) {
-        cout << "Search term cannot be empty.\n";
-        pressKeyToContinue();
-        return;
-    }
+        if (displayableCategoryCount == 0) {
+            setColor(RED); cout << "No categories available to delete.\n"; resetColor();
+            cout << "\nPress any key to return...";
+            delete[] displayableCategories;
+            _getch();
+            return;
+        }
+        
+        mergeSortCategories(displayableCategories, 0, displayableCategoryCount - 1, true);
 
-    string lowerSearchTerm = "";
-    for (size_t i = 0; i < searchTerm.length(); i++) {
-        lowerSearchTerm += tolower(searchTerm[i]);
-    }
+        setColor(GREEN); cout << "=== Select Category to Delete ===\n"; resetColor();
+        int maxNumLength = (int)string("No.").length();
+        int maxCategoryNameLength = (int)string("Category Name").length();
 
-    Product foundProducts[100];
-    int foundCount = 0;
+        for (int i = 0; i < displayableCategoryCount; ++i) {
+            maxNumLength = manualMax(maxNumLength, (int)intToString(i + 1).length());
+            maxCategoryNameLength = manualMax(maxCategoryNameLength, (int)displayableCategories[i].length());
+        }
 
-    for (int i = 0; i < count; i++) {
-        string productName = allProducts[i].name;
-        if (productName.length() >= lowerSearchTerm.length()) {
-            string prefix = productName.substr(0, lowerSearchTerm.length());
+        const int COLUMN_PADDING_SPACES = 2;
+        int numColWidth = maxNumLength + COLUMN_PADDING_SPACES;
+        int categoryNameColWidth = maxCategoryNameLength + COLUMN_PADDING_SPACES;
+        string headerLine = "+" + string(numColWidth, '-') + "+" + string(categoryNameColWidth, '-') + "+";
+
+        cout << headerLine << endl;
+        cout << "|" << left << setw(numColWidth) << " No."
+             << "|" << left << setw(categoryNameColWidth) << " Category Name"
+             << "|" << endl;
+        cout << headerLine << endl;
+        
+        for (int i = 0; i < displayableCategoryCount; ++i) {
+            cout << "|" << left << setw(numColWidth) << (" " + intToString(i + 1));
+            cout << "|" << left << setw(categoryNameColWidth) << (" " + displayableCategories[i]);
+            cout << "|" << endl;
+        }
+        cout << headerLine << endl;
+        
+        cout << "Enter category ID (1-" << displayableCategoryCount << ") to delete, or 0 to return: ";
+        string input;
+        int id;
+        getline(cin, input);
+        try {
+            size_t pos;
+            id = custom_stoi(input, &pos);
+        } catch (...) {
+            setColor(RED); cout << "Invalid input. Please enter a number.\n"; resetColor();
+            delete[] displayableCategories;
+            return;
+        }
+
+        if (id == 0) {
+            setColor(RED); cout << "Deletion cancelled.\n"; resetColor();
+            delete[] displayableCategories;
+            return;
+        }
+
+        if (id < 1 || id > displayableCategoryCount) {
+            setColor(RED); cout << "Invalid category ID.\n"; resetColor();
+            delete[] displayableCategories;
+            return;
+        }
+
+        string categoryToDelete = displayableCategories[id - 1];
+        delete[] displayableCategories;
+
+        bool inUse = false;
+        ProductNode* currentProd = productHead;
+        while(currentProd) {
+            if (manualToLower(currentProd->data.category) == manualToLower(categoryToDelete)) {
+                inUse = true;
+                break;
+            }
+            currentProd = currentProd->next;
+        }
+        
+        if (inUse) {
+            setColor(RED);
+            cout << "This category cannot be deleted because it is still in use by products.\n";
+            resetColor();
+            return;
+        }
+
+        cout << "\nAre you sure you want to delete the empty category '" << categoryToDelete << "'? (y/n): ";
+        string response;
+        getline(cin, response);
+        response = manualToLower(response);
+
+        if (response == "y") {
+            CategoryNode* current = categoryHead;
+            CategoryNode* prev = NULL;
+            while(current != NULL && manualToLower(current->data) != manualToLower(categoryToDelete)) {
+                prev = current;
+                current = current->next;
+            }
             
-            string lowerPrefix = "";
-            for (size_t j = 0; j < prefix.length(); j++) {
-                lowerPrefix += tolower(prefix[j]);
+            if (current != NULL) {
+                if (prev == NULL) {
+                    categoryHead = current->next;
+                } else {
+                    prev->next = current->next;
+                }
+                delete current;
+                categoryCount--;
+                
+                try {
+                    saveCategories(categoriesFilename);
+                    setColor(GREEN); cout << "Category '" << categoryToDelete << "' deleted successfully.\n"; resetColor();
+                } catch (const runtime_error& e) {
+                    cerr << "Error saving categories after deletion: " << e.what() << endl;
+                    setColor(YELLOW); cout << "Category deletion failed to save to file.\n"; resetColor();
+                }
+            }
+        } else {
+            setColor(RED); cout << "Category deletion cancelled.\n"; resetColor();
+        }
+    }
+
+    void addProduct(const string& filename) {
+        system("cls");
+        setColor(LIGHT_BLUE); cout << "\n=== Add New Product ===\n"; resetColor();
+        string name, price, category, stockInput;
+        int stock;
+        
+        cout << "Enter product name: ";
+        getline(cin, name);
+        name.erase(0, name.find_first_not_of(" \t\n\r"));
+        name.erase(name.find_last_not_of(" \t\n\r") + 1);
+
+        if (name.empty()) {
+            setColor(RED); cout << "Product name cannot be empty.\n"; resetColor();
+            _getch(); return;
+        }
+        
+        Product* tempProducts = createProductArrayFromList();
+        if(tempProducts) {
+             mergeSort(tempProducts, 0, productCount - 1, true, "name");
+             if (binarySearch(tempProducts, productCount, name) != -1) {
+                setColor(RED); cout << "Product name '" << name << "' already exists!\n"; resetColor();
+                delete[] tempProducts;
+                _getch(); return;
+             }
+             delete[] tempProducts;
+        }
+
+        cout << "Enter price (e.g., RM 140.00): ";
+        getline(cin, price);
+        price.erase(0, price.find_first_not_of(" \t\n\r"));
+        price.erase(price.find_last_not_of(" \t\n\r") + 1);
+        if (!isValidPrice(price)) {
+            setColor(RED); cout << "Invalid price format! Use format like RM 140.00.\n"; resetColor();
+             _getch(); return;
+        }
+
+        cout << "\n";
+        setColor(GREEN); cout << "=== Select a Category ===\n"; resetColor();
+        if (categoryCount == 0) {
+            setColor(RED); cout << "No categories exist. Please add a category first.\n"; resetColor();
+             _getch(); return;
+        }
+
+        string* tempCategories = createCategoryArrayFromList();
+        mergeSortCategories(tempCategories, 0, categoryCount - 1, true);
+        
+        int maxNumLength = (int)string("ID").length();
+        int maxCategoryNameLength = (int)string("Category Name").length();
+        for (int i = 0; i < categoryCount; ++i) {
+            maxNumLength = manualMax(maxNumLength, (int)intToString(i + 1).length());
+            maxCategoryNameLength = manualMax(maxCategoryNameLength, (int)tempCategories[i].length());
+        }
+        const int COLUMN_PADDING_SPACES = 2;
+        int numColWidth = maxNumLength + COLUMN_PADDING_SPACES;
+        int categoryNameColWidth = maxCategoryNameLength + COLUMN_PADDING_SPACES;
+        string headerLine = "+" + string(numColWidth, '-') + "+" + string(categoryNameColWidth, '-') + "+";
+        cout << headerLine << endl;
+        cout << "|" << left << setw(numColWidth) << " ID" << "|" << left << setw(categoryNameColWidth) << " Category Name" << "|" << endl;
+        cout << headerLine << endl;
+        for (int i = 0; i < categoryCount; i++) {
+            cout << "|" << left << setw(numColWidth) << (" " + intToString(i + 1));
+            cout << "|" << left << setw(categoryNameColWidth) << (" " + tempCategories[i]);
+            cout << "|" << endl;
+        }
+        cout << headerLine << endl;
+
+        cout << "Enter category ID (1-" << categoryCount << ", or 0 to cancel): ";
+        string categoryIdInput;
+        int categoryId;
+        getline(cin, categoryIdInput);
+        try {
+            size_t pos;
+            categoryId = custom_stoi(categoryIdInput, &pos);
+        } catch (...) {
+            setColor(RED); cout << "Invalid input.\n"; resetColor();
+             delete[] tempCategories; _getch(); return;
+        }
+
+        if (categoryId == 0 || categoryId < 1 || categoryId > categoryCount) {
+            setColor(RED); cout << "Invalid choice or cancellation.\n"; resetColor();
+            delete[] tempCategories; _getch(); return;
+        }
+        
+        category = tempCategories[categoryId - 1];
+        delete[] tempCategories;
+
+        cout << "\nEnter stock: ";
+        getline(cin, stockInput);
+        try {
+            size_t pos;
+            stock = custom_stoi(stockInput, &pos);
+            if (stock < 0) {
+                setColor(RED); cout << "Stock cannot be negative.\n"; resetColor();
+                _getch(); return;
+            }
+        } catch (...) {
+            setColor(RED); cout << "Invalid stock value!\n"; resetColor();
+             _getch(); return;
+        }
+
+        try {
+            Product newProd(name, price, category, stock);
+            ProductNode* newNode = new ProductNode(newProd);
+            newNode->next = productHead;
+            productHead = newNode;
+            productCount++;
+            
+            saveToFile(filename);
+            setColor(GREEN); cout << "Product '" << name << "' added successfully.\n"; resetColor();
+            Sleep(1000);
+            sortAndDisplayProductNames();
+        } catch (const runtime_error& e) {
+            ProductNode* toDelete = productHead;
+            productHead = productHead->next;
+            delete toDelete;
+            productCount--;
+            cerr << "Error saving product: " << e.what() << endl;
+            setColor(RED); cout << "Product addition failed to save.\n"; resetColor();
+            _getch();
+        }
+    }
+
+    void deleteProduct(const string& filename, const string& ordersFilename) {
+        system("cls");
+        setColor(LIGHT_BLUE); cout << "\n=== Delete Product ===\n"; resetColor();
+        if (productCount == 0) {
+            setColor(RED); cout << "No products to delete.\n"; resetColor();
+            _getch(); return;
+        }
+        
+        Product* tempProducts = createProductArrayFromList();
+        mergeSort(tempProducts, 0, productCount - 1, true, "name");
+
+        setColor(GREEN); cout << "=== Select Product to Delete ===\n"; resetColor();
+        int maxNumLength = (int)string("No.").length();
+        int maxNameLength = (int)string("Product Name").length();
+        for (int i = 0; i < productCount; ++i) {
+            maxNumLength = manualMax(maxNumLength, (int)intToString(i + 1).length());
+            maxNameLength = manualMax(maxNameLength, (int)tempProducts[i].name.length());
+        }
+        const int COLUMN_PADDING_SPACES = 2;
+        int numColWidth = maxNumLength + COLUMN_PADDING_SPACES;
+        int nameColWidth = maxNameLength + COLUMN_PADDING_SPACES;
+        string headerLine = "+" + string(numColWidth, '-') + "+" + string(nameColWidth, '-') + "+";
+        cout << headerLine << endl;
+        cout << "|" << left << setw(numColWidth) << " No." << "|" << left << setw(nameColWidth) << " Product Name" << "|" << endl;
+        cout << headerLine << endl;
+        for (int i = 0; i < productCount; i++) {
+            cout << "|" << left << setw(numColWidth) << (" " + intToString(i + 1));
+            cout << "|" << left << setw(nameColWidth) << (" " + tempProducts[i].name);
+            cout << "|" << endl;
+        }
+        cout << headerLine << endl;
+
+        cout << "Enter product ID to delete (1-" << productCount << "), or 0 to return: ";
+        string input;
+        int id;
+        try {
+            getline(cin, input);
+            size_t pos;
+            id = custom_stoi(input, &pos);
+        } catch (...) {
+            setColor(RED); cout << "Invalid input.\n"; resetColor();
+            delete[] tempProducts; return;
+        }
+
+        if (id == 0 || id < 1 || id > productCount) {
+            setColor(RED); cout << "Invalid choice or cancellation.\n"; resetColor();
+            delete[] tempProducts; return;
+        }
+
+        string productNameToDelete = tempProducts[id - 1].name;
+        delete[] tempProducts; 
+
+        int purchasedCount = 0;
+        string* purchasedNames = getPurchasedProductNames(ordersFilename, purchasedCount);
+        bool purchased = isProductPurchased(productNameToDelete, purchasedNames, purchasedCount);
+        delete[] purchasedNames;
+
+        if (purchased) {
+            setColor(RED);
+            cout << "This product cannot be deleted because it has been purchased.\n";
+            resetColor();
+            return;
+        }
+
+        setColor(YELLOW); cout << "Are you sure you want to delete '" << productNameToDelete << "'? (y/n): "; resetColor();
+        string confirmation;
+        getline(cin, confirmation);
+        
+        if (manualToLower(confirmation) == "y") {
+            ProductNode* current = productHead;
+            ProductNode* prev = NULL;
+            while(current != NULL && current->data.name != productNameToDelete) {
+                prev = current;
+                current = current->next;
             }
 
-            if (lowerPrefix == lowerSearchTerm) {
-                if (foundCount < 100) {
-                    foundProducts[foundCount] = allProducts[i];
-                    foundCount++;
+            if (current != NULL) {
+                if (prev == NULL) productHead = current->next;
+                else prev->next = current->next;
+                delete current;
+                productCount--;
+
+                try {
+                    saveToFile(filename);
+                    setColor(GREEN); cout << "Product deleted successfully.\n"; resetColor();
+                } catch (const runtime_error& e) {
+                    cerr << "Error saving after deletion: " << e.what() << endl;
+                    setColor(RED); cout << "Product deletion failed to save to file.\n"; resetColor();
+                }
+            }
+        } else {
+            setColor(RED); cout << "Deletion cancelled.\n"; resetColor();
+        }
+    }
+    
+    void manualReplace(string& str, char oldChar, char newChar) const {
+        for (size_t i = 0; i < str.length(); ++i) {
+            if (str[i] == oldChar) {
+                str[i] = newChar;
+            }
+        }
+    }
+    
+    void saveToFile(const string& filename) {
+        ofstream outFile(filename.c_str(), ios::out | ios::trunc);
+        if (!outFile) {
+            throw runtime_error("Cannot open product file for writing: " + filename);
+        }
+
+        ProductNode* current = productHead;
+        while (current != NULL) {
+            string safeName = current->data.name;
+            manualReplace(safeName, ',', ';');
+            string safePrice = current->data.price;
+            string safeCategory = current->data.category;
+            manualReplace(safeCategory, ',', ';');
+            
+            outFile << safeName << "," << safePrice << ","
+                    << safeCategory << "," << current->data.stock << "\n";
+            
+            current = current->next;
+        }
+        outFile.close();
+    }
+    
+    void loadFromFile(const string& filename) {
+        clearProductList();
+
+        ifstream inFile(filename.c_str());
+        if (!inFile) {
+            cout << "Product file not found: " + filename + ". Creating empty file.\n";
+            ofstream outFile(filename.c_str());
+            if (outFile) outFile.close();
+            return;
+        }
+        
+        string line;
+        int lineNumber = 0;
+        while (getline(inFile, line)) {
+            lineNumber++;
+            stringstream ss(line);
+            string tempName, tempPrice, tempCategory, tempStockStr;
+            if (!(getline(ss, tempName, ',') && getline(ss, tempPrice, ',') && getline(ss, tempCategory, ',') && getline(ss, tempStockStr))) {
+                cerr << "Warning: Malformed line #" << lineNumber << " in " << filename << ". Skipping.\n";
+                continue;
+            }
+            tempName.erase(0, tempName.find_first_not_of(" \t")); tempName.erase(tempName.find_last_not_of(" \t") + 1);
+            tempPrice.erase(0, tempPrice.find_first_not_of(" \t")); tempPrice.erase(tempPrice.find_last_not_of(" \t") + 1);
+            tempCategory.erase(0, tempCategory.find_first_not_of(" \t")); tempCategory.erase(tempCategory.find_last_not_of(" \t") + 1);
+            tempStockStr.erase(0, tempStockStr.find_first_not_of(" \t")); tempStockStr.erase(tempStockStr.find_last_not_of(" \t") + 1);
+            
+            manualReplace(tempName, ';', ',');
+            manualReplace(tempCategory, ';', ',');
+
+            int tempStock = 0;
+            try {
+                size_t pos;
+                tempStock = custom_stoi(tempStockStr, &pos);
+            } catch (...) { tempStock = 0; }
+
+            if (!isValidPrice(tempPrice)) {
+                cerr << "Warning: Invalid price for '" << tempName << "' on line #" << lineNumber << ". Skipping.\n";
+                continue;
+            }
+            
+            bool validCategory = false;
+            CategoryNode* catCurrent = categoryHead;
+            while(catCurrent) {
+                if (manualToLower(catCurrent->data) == manualToLower(tempCategory)) {
+                    tempCategory = catCurrent->data;
+                    validCategory = true;
+                    break;
+                }
+                catCurrent = catCurrent->next;
+            }
+            if (!validCategory) {
+                 cerr << "Warning: Invalid category '" << tempCategory << "' on line #" << lineNumber << ". Assigning to 'Uncategorized'.\n";
+                 tempCategory = "Uncategorized";
+            }
+            
+            Product newProd(tempName, tempPrice, tempCategory, tempStock);
+            ProductNode* newNode = new ProductNode(newProd);
+            newNode->next = productHead;
+            productHead = newNode;
+            productCount++;
+        }
+        inFile.close();
+    }
+    
+    void displayProductById(int id, const Product* arr, int arrSize) const {
+        if (arr == NULL || id < 1 || id > arrSize) {
+            cerr << "Internal Error: Invalid product ID or array for display.\n";
+            return;
+        }
+        const Product& product = arr[id - 1];
+        setColor(LIGHT_BLUE); cout << "\n--- Product Details ---\n"; resetColor();
+        setColor(GREEN); cout << "Product Name: " << product.name << endl; resetColor();
+        setColor(LIGHT_BLUE); cout << "Category: " << product.category << endl; resetColor();
+        setColor(GREEN); cout << "Price: " << product.price << endl; resetColor();
+        setColor(LIGHT_BLUE); cout << "Stock: " << product.stock << endl; resetColor();
+        setColor(LIGHT_BLUE); cout << "-----------------------\n"; resetColor();
+    }
+
+    void displayProductNamesByCategory(const string& category) const {
+        Product* tempFilteredArray = new Product[productCount];
+        int tempFilteredCount = 0;
+        ProductNode* current = productHead;
+        string lowerCategory = manualToLower(category);
+
+        while (current) {
+            if (manualToLower(current->data.category) == lowerCategory) {
+                tempFilteredArray[tempFilteredCount++] = current->data;
+            }
+            current = current->next;
+        }
+
+        if (tempFilteredCount == 0) {
+            setColor(RED); cout << "No products found in category: '" + category + "'.\n"; resetColor();
+            cout << "\nPress any key to return..."; _getch();
+            delete[] tempFilteredArray;
+            return;
+        }
+
+        mergeSort(tempFilteredArray, 0, tempFilteredCount - 1, true, "name");
+        
+        setColor(GREEN); cout << "=== Products in category '" + category + "' (sorted by name) ===\n"; resetColor();
+        int maxNumLength = (int)string("No.").length();
+        int maxProductNameLength = (int)string("Product Name").length();
+        for (int i = 0; i < tempFilteredCount; ++i) {
+            maxNumLength = manualMax(maxNumLength, (int)intToString(i + 1).length());
+            maxProductNameLength = manualMax(maxProductNameLength, (int)tempFilteredArray[i].name.length());
+        }
+        const int COLUMN_PADDING_SPACES = 2;
+        int numColWidth = maxNumLength + COLUMN_PADDING_SPACES;
+        int productNameColWidth = maxProductNameLength + COLUMN_PADDING_SPACES;
+        string headerLine = "+" + string(numColWidth, '-') + "+" + string(productNameColWidth, '-') + "+";
+        cout << headerLine << endl;
+        cout << "|" << left << setw(numColWidth) << " No." << "|" << left << setw(productNameColWidth) << " Product Name" << "|" << endl;
+        cout << headerLine << endl;
+        for (int i = 0; i < tempFilteredCount; ++i) {
+            cout << "|" << left << setw(numColWidth) << (" " + intToString(i + 1));
+            cout << "|" << left << setw(productNameColWidth) << (" " + tempFilteredArray[i].name);
+            cout << "|" << endl;
+        }
+        cout << headerLine << endl;
+        
+        delete[] tempFilteredArray;
+        cout << "\nPress any key to return...";
+        _getch();
+    }
+    
+    void searchProduct(const string& searchTerm) {
+        system("cls");
+        setColor(LIGHT_BLUE); cout << "\n=== Search Product ===\n"; resetColor();
+        if (searchTerm.empty() || productCount == 0) {
+             setColor(RED); cout << "Search term is empty or no products available.\n"; resetColor();
+             _getch(); return;
+        }
+
+        Product* combinedResults = new Product[productCount];
+        int combinedCount = 0;
+        ProductNode* current = productHead;
+        string lowerSearchTerm = manualToLower(searchTerm);
+
+        while (current) {
+            if (manualContains(manualToLower(current->data.name), lowerSearchTerm) ||
+                manualContains(manualToLower(current->data.category), lowerSearchTerm)) {
+                
+                bool duplicate = false;
+                for (int j = 0; j < combinedCount; ++j) {
+                    if (manualToLower(current->data.name) == manualToLower(combinedResults[j].name)) {
+                        duplicate = true;
+                        break;
+                    }
+                }
+                if (!duplicate) {
+                    combinedResults[combinedCount++] = current->data;
+                }
+            }
+            current = current->next;
+        }
+
+        if (combinedCount == 0) {
+            setColor(RED); cout << "No products found matching '" << searchTerm << "'.\n"; resetColor();
+        } else {
+            mergeSort(combinedResults, 0, combinedCount - 1, true, "name");
+            
+            setColor(GREEN); cout << "=== Search Results for '" << searchTerm << "' ===\n"; resetColor();
+            int maxNumLength = (int)string("No.").length();
+            int maxProductNameLength = (int)string("Product Name").length();
+            int maxCategoryLength = (int)string("Category").length();
+            for (int i = 0; i < combinedCount; ++i) {
+                maxNumLength = manualMax(maxNumLength, (int)intToString(i + 1).length());
+                maxProductNameLength = manualMax(maxProductNameLength, (int)combinedResults[i].name.length());
+                maxCategoryLength = manualMax(maxCategoryLength, (int)combinedResults[i].category.length());
+            }
+            const int COLUMN_PADDING_SPACES = 2;
+            int numColWidth = maxNumLength + COLUMN_PADDING_SPACES;
+            int productNameColWidth = maxProductNameLength + COLUMN_PADDING_SPACES;
+            int categoryColWidth = maxCategoryLength + COLUMN_PADDING_SPACES;
+            string headerLine = "+" + string(numColWidth, '-') + "+" + string(productNameColWidth, '-') + "+" + string(categoryColWidth, '-') + "+";
+            cout << headerLine << endl;
+            cout << "|" << left << setw(numColWidth) << " No."
+                 << "|" << left << setw(productNameColWidth) << " Product Name"
+                 << "|" << left << setw(categoryColWidth) << " Category" << "|" << endl;
+            cout << headerLine << endl;
+            for (int i = 0; i < combinedCount; ++i) {
+                 cout << "|" << left << setw(numColWidth) << (" " + intToString(i + 1));
+                 cout << "|" << left << setw(productNameColWidth) << (" " + combinedResults[i].name);
+                 cout << "|" << left << setw(categoryColWidth) << (" " + combinedResults[i].category);
+                 cout << "|" << endl;
+            }
+            cout << headerLine << endl;
+
+            cout << "Enter product ID (1-" << combinedCount << ") to view, or 0 to return: ";
+            string input;
+            int id;
+            getline(cin, input);
+            try {
+                size_t pos;
+                id = custom_stoi(input, &pos);
+            } catch(...) { id = -1; }
+
+            if (id >= 1 && id <= combinedCount) {
+                system("cls");
+                displayProductById(id, combinedResults, combinedCount);
+                _getch();
+            }
+        }
+        delete[] combinedResults;
+        cout << "\nPress any key to return...";
+        _getch();
+    }
+    
+    void sortAndDisplayCategories() {
+        system("cls");
+        setColor(LIGHT_BLUE); cout << "\n=== Product Categories (sorted) ===\n"; resetColor();
+        if (categoryCount == 0) {
+            setColor(RED); cout << "No categories to display.\n"; resetColor();
+            _getch(); return;
+        }
+
+        string* tempCategories = createCategoryArrayFromList();
+        mergeSortCategories(tempCategories, 0, categoryCount - 1, true);
+
+        int maxNumLength = (int)string("No.").length();
+        int maxCategoryNameLength = (int)string("Category Name").length();
+        for (int i = 0; i < categoryCount; ++i) {
+            maxNumLength = manualMax(maxNumLength, (int)intToString(i + 1).length());
+            maxCategoryNameLength = manualMax(maxCategoryNameLength, (int)tempCategories[i].length());
+        }
+        const int COLUMN_PADDING_SPACES = 2;
+        int numColWidth = maxNumLength + COLUMN_PADDING_SPACES;
+        int categoryNameColWidth = maxCategoryNameLength + COLUMN_PADDING_SPACES;
+        string headerLine = "+" + string(numColWidth, '-') + "+" + string(categoryNameColWidth, '-') + "+";
+        cout << headerLine << endl;
+        cout << "|" << left << setw(numColWidth) << " No." << "|" << left << setw(categoryNameColWidth) << " Category Name" << "|" << endl;
+        cout << headerLine << endl;
+        for (int i = 0; i < categoryCount; i++) {
+            cout << "|" << left << setw(numColWidth) << (" " + intToString(i + 1));
+            cout << "|" << left << setw(categoryNameColWidth) << (" " + tempCategories[i]);
+            cout << "|" << endl;
+        }
+        cout << headerLine << endl;
+
+        cout << "Enter category ID (1-" << categoryCount << ") to view products, or 0 to return: ";
+        string input;
+        int id;
+        getline(cin, input);
+        try {
+            size_t pos;
+            id = custom_stoi(input, &pos);
+        } catch(...) { id = -1; }
+
+        if (id >= 1 && id <= categoryCount) {
+            system("cls");
+            displayProductNamesByCategory(tempCategories[id - 1]);
+        }
+        
+        delete[] tempCategories;
+    }
+    
+    void sortAndDisplayProductNames() {
+        system("cls");
+        setColor(LIGHT_BLUE); cout << "\n=== Products (sorted by name) ===\n"; resetColor();
+        if (productCount == 0) {
+            setColor(RED); cout << "No products to display.\n"; resetColor();
+            _getch(); return;
+        }
+        
+        Product* tempProducts = createProductArrayFromList();
+        mergeSort(tempProducts, 0, productCount - 1, true, "name");
+
+        int maxNumLength = (int)string("No.").length();
+        int maxProductNameLength = (int)string("Product Name").length();
+        int maxPriceLength = (int)string("Price").length();
+        int maxStockLength = (int)string("Current Stock").length();
+        for (int i = 0; i < productCount; ++i) {
+            maxNumLength = manualMax(maxNumLength, (int)intToString(i + 1).length());
+            maxProductNameLength = manualMax(maxProductNameLength, (int)tempProducts[i].name.length());
+            maxPriceLength = manualMax(maxPriceLength, (int)tempProducts[i].price.length());
+            maxStockLength = manualMax(maxStockLength, (int)intToString(tempProducts[i].stock).length());
+        }
+        const int COLUMN_PADDING_SPACES = 2;
+        int numColWidth = maxNumLength + COLUMN_PADDING_SPACES;
+        int productNameColWidth = maxProductNameLength + COLUMN_PADDING_SPACES;
+        int priceColWidth = maxPriceLength + COLUMN_PADDING_SPACES;
+        int stockColWidth = manualMax((int)string("Current Stock").length(), maxStockLength) + COLUMN_PADDING_SPACES + 2;
+        string headerLine = "+" + string(numColWidth, '-') + "+" + string(productNameColWidth, '-') + "+" + string(priceColWidth, '-') + "+" + string(stockColWidth, '-') + "+";
+        cout << headerLine << endl;
+        cout << "|" << left << setw(numColWidth) << " No."
+             << "|" << left << setw(productNameColWidth) << " Product Name"
+             << "|" << left << setw(priceColWidth) << " Price"
+             << "|" << left << setw(stockColWidth) << " Current Stock"
+             << "|" << endl;
+        cout << headerLine << endl;
+        for (int i = 0; i < productCount; i++) {
+            cout << "|" << left << setw(numColWidth) << (" " + intToString(i + 1));
+            cout << "|" << left << setw(productNameColWidth) << (" " + tempProducts[i].name);
+            cout << "|" << left << setw(priceColWidth) << (" " + tempProducts[i].price);
+            string stockStr = intToString(tempProducts[i].stock);
+            cout << "|" << right << setw(stockColWidth - 2) << stockStr << "  |" << endl;
+        }
+        cout << headerLine << endl;
+
+        cout << "Enter product ID (1-" << productCount << ") to view details, or 0 to return: ";
+        string input;
+        int id;
+        getline(cin, input);
+        try {
+            size_t pos;
+            id = custom_stoi(input, &pos);
+        } catch(...) { id = -1; }
+
+        if (id >= 1 && id <= productCount) {
+            system("cls");
+            displayProductById(id, tempProducts, productCount);
+            _getch();
+        }
+        
+        delete[] tempProducts;
+    }
+
+    Product* findProductByName(const string& productName) {
+        ProductNode* current = productHead;
+        string lowerProductName = manualToLower(productName);
+        while (current) {
+            if (manualToLower(current->data.name) == lowerProductName) {
+                return &(current->data);
+            }
+            current = current->next;
+        }
+        return NULL;
+    }
+
+    int getProductStock(const string& productName) {
+        Product* product = findProductByName(productName);
+        return product ? product->stock : -1;
+    }
+
+    bool updateProductStock(const string& productName, int quantityChange, const string& filename) {
+        Product* product = findProductByName(productName);
+        if (product) {
+            long long newStock = (long long)product->stock + quantityChange;
+            if (newStock < 0) {
+                product->stock = 0;
+            } else if (newStock > numeric_limits<int>::max()) {
+                product->stock = numeric_limits<int>::max();
+            } else {
+                product->stock = (int)newStock;
+            }
+
+            try {
+                saveToFile(filename);
+                return true;
+            } catch (const runtime_error& e) {
+                cerr << "Error saving stock update: " << e.what() << endl;
+                return false;
+            }
+        }
+        return false;
+    }
+    
+    void editProductStock(const string& productsFilename) {
+        system("cls");
+        setColor(LIGHT_BLUE); cout << "\n=== Edit Product Stock ===\n"; resetColor();
+        if (productCount == 0) {
+            setColor(RED); cout << "No products available.\n"; resetColor();
+            _getch(); return;
+        }
+        
+        Product* tempProducts = createProductArrayFromList();
+        mergeSort(tempProducts, 0, productCount - 1, true, "name");
+
+        setColor(GREEN); cout << "=== Current Products (sorted by name) ===\n"; resetColor();
+        int maxNumLength = (int)string("No.").length();
+        int maxProductNameLength = (int)string("Product Name").length();
+        int maxStockLength = (int)string("Current Stock").length();
+        for (int i = 0; i < productCount; ++i) {
+            maxNumLength = manualMax(maxNumLength, (int)intToString(i + 1).length());
+            maxProductNameLength = manualMax(maxProductNameLength, (int)tempProducts[i].name.length());
+            maxStockLength = manualMax(maxStockLength, (int)intToString(tempProducts[i].stock).length());
+        }
+        const int COLUMN_PADDING_SPACES = 2;
+        int numColWidth = maxNumLength + COLUMN_PADDING_SPACES;
+        int productNameColWidth = maxProductNameLength + COLUMN_PADDING_SPACES;
+        int stockColWidth = manualMax((int)string("Current Stock").length(), maxStockLength) + COLUMN_PADDING_SPACES + 2;
+        string headerLine = "+" + string(numColWidth, '-') + "+" + string(productNameColWidth, '-') + "+" + string(stockColWidth, '-') + "+";
+        cout << headerLine << endl;
+        cout << "|" << left << setw(numColWidth) << " No."
+             << "|" << left << setw(productNameColWidth) << " Product Name"
+             << "|" << left << setw(stockColWidth) << " Current Stock"
+             << "|" << endl;
+        cout << headerLine << endl;
+        for (int i = 0; i < productCount; i++) {
+            cout << "|" << left << setw(numColWidth) << (" " + intToString(i + 1));
+            cout << "|" << left << setw(productNameColWidth) << (" " + tempProducts[i].name);
+            string stockStr = intToString(tempProducts[i].stock);
+            cout << "|" << right << setw(stockColWidth - 2) << stockStr << "  |" << endl;
+        }
+        cout << headerLine << endl;
+
+
+        cout << "Enter product ID to edit (1-" << productCount << ", or 0 to cancel): ";
+        string input;
+        int choice;
+        getline(cin, input);
+        try {
+            size_t pos;
+            choice = custom_stoi(input, &pos);
+        } catch(...) {
+            setColor(RED); cout << "Invalid input.\n"; resetColor();
+            delete[] tempProducts;
+            _getch(); return;
+        }
+        
+        if (choice >= 1 && choice <= productCount) {
+            string productToEditName = tempProducts[choice - 1].name;
+            int currentStock = tempProducts[choice - 1].stock;
+            
+            cout << "Selected: " << productToEditName << " (Current Stock: " << currentStock << ")\n";
+            cout << "Enter new stock quantity: ";
+            string newStockInput;
+            int newStock;
+            getline(cin, newStockInput);
+            try {
+                size_t pos;
+                newStock = custom_stoi(newStockInput, &pos);
+                if(newStock < 0) {
+                    setColor(RED); cout << "Stock cannot be negative.\n"; resetColor();
+                    delete[] tempProducts;
+                    _getch(); return;
+                }
+            } catch(...) {
+                setColor(RED); cout << "Invalid quantity.\n"; resetColor();
+                delete[] tempProducts;
+                _getch(); return;
+            }
+
+            Product* realProduct = findProductByName(productToEditName);
+            if (realProduct) {
+                realProduct->stock = newStock;
+                try {
+                    saveToFile(productsFilename);
+                    setColor(GREEN); cout << "Stock updated successfully.\n"; resetColor();
+                } catch (const runtime_error& e) {
+                    setColor(RED); cout << "Failed to save stock update to file.\n"; resetColor();
                 }
             }
         }
-    }
-
-    if (foundCount > 0) {
-        setColor(COLOR_SUCCESS);
-        cout << "\nFound " << foundCount << " product(s) starting with '" << searchTerm << "':\n";
-        setColor(COLOR_DEFAULT);
-        mergeSort(foundProducts, 0, foundCount - 1, "name", true); 
-        displayProductTable(foundProducts, foundCount);
-    } else {
-        setColor(COLOR_ERROR);
-        cout << "\nNo products found starting with '" << searchTerm << "'.\n";
-        setColor(COLOR_DEFAULT);
-    }
-
-    pressKeyToContinue();
-}
-
-void Customer::sortRecords() {
-    printHeader("Browse Sorted Product Catalog");
-    Product allProducts[100];
-    int count = productCatalog.getAll(allProducts, 100);
-    if (count == 0) {
-        cout << "No products to sort.\n";
-        pressKeyToContinue();
-        return;
-    }
-
-    cout << "Sort by:\n";
-    cout << "1. Price\n";
-    cout << "2. Name\n";
-    cout << "3. ID\n";
-    cout << "Enter choice: ";
-    int sortChoice = getIntegerInput();
-    
-    cout << "Order:\n";
-    cout << "1. Ascending\n";
-    cout << "2. Descending\n";
-    cout << "Enter choice: ";
-    int orderChoice = getIntegerInput();
-
-    string sortByCriteria;
-    switch (sortChoice) {
-        case 1:
-            sortByCriteria = "price";
-            break;
-        case 2:
-            sortByCriteria = "name";
-            break;
-        case 3:
-            sortByCriteria = "id";
-            break;
-        default:
-            cout << "Invalid sort choice. Defaulting to sort by ID.\n";
-            sortByCriteria = "id";
-            break;
-    }
-    
-    bool isAscending;
-    if (orderChoice == 1) {
-        isAscending = true;
-    } else {
-        isAscending = false;
-    }
-
-    mergeSort(allProducts, 0, count - 1, sortByCriteria, isAscending);
-    
-    printSubHeader("Sorted Product Catalog");
-    displayProductTable(allProducts, count);
-    pressKeyToContinue();
-}
-
-void Customer::displayAllRecords(){
-    printHeader("Browse Full Product Catalog");
-    Product allProducts[100];
-    int count = productCatalog.getAll(allProducts, 100);
-    if (count == 0) {
-        cout << "No products in the catalog.\n";
-    } else {
-        displayProductTable(allProducts, count);
-    }
-    pressKeyToContinue();
-}
-
-void saveProductCatalogToFile(HashTable& catalog) {
-    ofstream outFile("products.txt");
-    if(!outFile){
-        Logger::getInstance().logError("Could not open products.txt for writing.");
-        return;
-    }
-    Product allProducts[100];
-    int count = catalog.getAll(allProducts, 100);
-    mergeSort(allProducts, 0, count-1, "id", true);
-    for (int i = 0; i < count; i++) {
-        outFile << allProducts[i].id << "," << allProducts[i].name << "," << allProducts[i].category << ","
-                << fixed << setprecision(2) << allProducts[i].price << "," << allProducts[i].quantityInStock << endl;
-    }
-    outFile.close();
-}
-
-void loadProductCatalogFromFile(HashTable& catalog) {
-    ifstream inFile("products.txt");
-    if (!inFile) {
-        return;
-    }
-    string line;
-    while(getline(inFile, line)) {
-        stringstream ss(line);
-        string id_str, name, cat, price_str, qty_str;
-        getline(ss, id_str, ',');
-        getline(ss, name, ',');
-        getline(ss, cat, ',');
-        getline(ss, price_str, ',');
-        getline(ss, qty_str, ',');
-        if(!id_str.empty()){
-            catalog.add(Product(atoi(id_str.c_str()), name, cat, atof(price_str.c_str()), atoi(qty_str.c_str())));
-        }
-    }
-    inFile.close();
-}
-
-// =================== MODIFICATION: NEW CATEGORY FILE I/O ===================
-void loadCategoriesFromFile() {
-    ifstream inFile("categories.txt");
-    if (!inFile) {
-        // Create default categories if file doesn't exist
-        categories.push_back("Kitchen");
-        categories.push_back("Living Room");
-        categories.push_back("Bedroom");
-        categories.push_back("Uncategorized");
-        saveCategoriesToFile();
-        return;
-    }
-    string line;
-    while(getline(inFile, line)) {
-        if (!line.empty()) {
-            categories.push_back(line);
-        }
-    }
-    inFile.close();
-}
-// =================== END OF MODIFICATION ===================
-
-
-// Global objects
-UserManager userManager;
-HashTable productCatalog;
-
-
-// =================================================================
-// 8. MAIN DRIVER
-// =================================================================
-
-int main() {
-    Logger::getInstance().logInfo("System Startup.");
-    loadProductCatalogFromFile(productCatalog);
-    // =================== MODIFICATION: LOAD CATEGORIES ===================
-    loadCategoriesFromFile();
-    // =================== END OF MODIFICATION ===================
-
-    int choice;
-    do {
-        printHeader("Home Appliance Shop - Main Menu");
-        cout << "1. Admin Portal\n";
-        cout << "2. Customer Portal\n";
-        cout << "0. Exit System\n";
-        cout << "\n";
-        cout << "Enter your choice: ";
         
-        cin.clear();
-        fflush(stdin);
-        choice = getIntegerInput();
+        delete[] tempProducts;
+        _getch();
+    }
+    
+    Product* getProductsArrayForCustomer() {
+        return createProductArrayFromList();
+    }
 
+    int getProductCount() const {
+        return productCount;
+    }
+    
+    Product* getProductByName(const string& name) {
+        ProductNode* current = productHead;
+        while(current) {
+            if(manualToLower(current->data.name) == manualToLower(name)) {
+                return &(current->data);
+            }
+            current = current->next;
+        }
+        return NULL;
+    }
+};
+
+struct OrderItem {
+    string name;
+    string priceAtPurchase;
+    string category;
+    int quantity;
+    string timestamp;
+    OrderItem(string n = "", string p = "", string c = "", int q = 0, string ts = "")
+        : name(n), priceAtPurchase(p), category(c), quantity(q), timestamp(ts) {}
+};
+
+struct CustomerNode {
+    OrderItem data;
+    CustomerNode* next;
+    CustomerNode(const OrderItem& item) : data(item), next(NULL) {}
+};
+
+class Customer {
+private:
+    CustomerNode* cartList;
+    CustomerNode* orderHistory;
+    int cartCount;
+    int orderHistoryCount;
+    string username;
+    string password;
+    bool isLoggedIn;
+    ProductList* globalProductList;
+
+    void clearList(CustomerNode*& head) {
+        while (head) {
+            CustomerNode* temp = head;
+            head = head->next;
+            delete temp;
+        }
+        if (&head == &cartList) cartCount = 0;
+        if (&head == &orderHistory) orderHistoryCount = 0;
+    }
+
+    void insertAtEnd(CustomerNode*& head, const OrderItem& item) {
+        CustomerNode* newNode = new CustomerNode(item);
+        if (!head) {
+            head = newNode;
+        } else {
+            CustomerNode* current = head;
+            while (current->next) current = current->next;
+            current->next = newNode;
+        }
+    }
+
+    void loadOrderHistory(const string& filename) {
+        ifstream file(filename.c_str());
+        if (!file) return;
+
+        clearList(orderHistory);
+        string line;
+        while (getline(file, line)) {
+            stringstream ss(line);
+            string tempUser, tempTime, tempName, tempQtyStr, tempPriceStr;
+            if (getline(ss, tempUser, '\t') && getline(ss, tempTime, '\t') && 
+                getline(ss, tempName, '\t') && getline(ss, tempQtyStr, '\t') && 
+                getline(ss, tempPriceStr)) {
+                
+                if (manualToLower(tempUser) == manualToLower(username)) {
+                    int tempQty;
+                    try { tempQty = custom_stoi(tempQtyStr); } catch(...) { continue; }
+                    string tempCategory = "N/A";
+                    Product* p = globalProductList->getProductByName(tempName);
+                    if(p) tempCategory = p->category;
+                    
+                    OrderItem item(tempName, tempPriceStr, tempCategory, tempQty, tempTime);
+                    insertAtEnd(orderHistory, item);
+                    orderHistoryCount++;
+                }
+            }
+        }
+        file.close();
+    }
+
+public:
+    Customer(ProductList* productListPtr)
+        : cartList(NULL), orderHistory(NULL), cartCount(0), orderHistoryCount(0), 
+          isLoggedIn(false), globalProductList(productListPtr) {
+        username = "";
+        password = "";
+    }
+    
+    ~Customer() {
+        clearList(cartList);
+        clearList(orderHistory);
+    }
+
+    bool registerCustomer(const string& filename) {
+        system("cls");
+        setColor(LIGHT_BLUE); cout << "\n=== Customer Registration ===\n"; resetColor();
+        string newUsername, newPassword;
+        cout << "Enter new username: ";
+        getline(cin, newUsername);
+        newUsername.erase(0, newUsername.find_first_not_of(" \t\n\r"));
+        newUsername.erase(newUsername.find_last_not_of(" \t\n\r") + 1);
+        if (newUsername.empty()) {
+            setColor(RED); cout << "Username cannot be empty.\n"; resetColor();
+            cout << "\nPress any key to return...";
+            _getch();
+            return false;
+        }
+        if (manualFind(newUsername, ',') != string::npos || manualFind(newUsername, '\t') != string::npos) {
+            setColor(RED); cout << "Username cannot contain commas or tabs.\n"; resetColor();
+            cout << "\nPress any key to return...";
+            _getch();
+            return false;
+        }
+        if (manualFileContains(filename, newUsername)) {
+            setColor(RED); cout << "Username '" << newUsername << "' already exists (case-insensitive match).\n"; resetColor();
+            cout << "\nPress any key to return...";
+            _getch();
+            return false;
+        }
+        cout << "Enter password: ";
+        newPassword = getPassword();
+        if (newPassword.empty()) {
+            setColor(RED); cout << "Password cannot be empty.\n"; resetColor();
+            cout << "\nPress any key to return...";
+            _getch();
+            return false;
+        }
+        if (manualFind(newPassword, ',') != string::npos || manualFind(newPassword, '\t') != string::npos) {
+            setColor(RED); cout << "Password cannot contain commas or tabs.\n"; resetColor();
+            cout << "\nPress any key to return...";
+            _getch();
+            return false;
+        }
+        ofstream file(filename.c_str(), ios::app);
+        if (!file) {
+            setColor(RED); cout << "Failed to open registration file. Registration failed.\n"; resetColor();
+            cout << "\nPress any key to return...";
+            _getch();
+            return false;
+        }
+        file << newUsername << "," << newPassword << "\n";
+        file.close();
+        setColor(GREEN); cout << "Registration successful for user '" << newUsername << "'!\n"; resetColor();
+        cout << "\nPress any key to return...";
+        _getch();
+        return true;
+    }
+
+    bool login(const string& loginFilename, const string& ordersFilename) {
+        system("cls");
+        setColor(LIGHT_BLUE); cout << "\n=== Customer Login ===\n"; resetColor();
+        int attempts = 3;
+        while (attempts > 0) {
+            cout << "Enter username: ";
+            getline(cin, username);
+            username.erase(0, username.find_first_not_of(" \t\n\r"));
+            username.erase(username.find_last_not_of(" \t\n\r") + 1);
+            if (username.empty()) {
+                setColor(RED); cout << "Username cannot be empty.\n"; resetColor();
+                attempts--;
+                if (attempts > 0) {
+                    cout << "Attempts remaining: " << attempts << "\n";
+                    Sleep(1500); system("cls"); setColor(LIGHT_BLUE); cout << "\n=== Customer Login ===\n"; resetColor();
+                }
+                continue;
+            }
+            cout << "Enter password: ";
+            password = getPassword();
+            if (password.empty()) {
+                setColor(RED); cout << "Password cannot be empty.\n"; resetColor();
+                attempts--;
+                if (attempts > 0) {
+                    cout << "Attempts remaining: " << attempts << "\n";
+                    Sleep(1500); system("cls"); setColor(LIGHT_BLUE); cout << "\n=== Customer Login ===\n"; resetColor();
+                }
+                continue;
+            }
+            ifstream file(loginFilename.c_str());
+            if (!file) {
+                setColor(RED); cout << "Login file not found. Please register first.\n"; resetColor();
+                cout << "\nPress any key to return...";
+                _getch();
+                return false;
+            }
+            string line;
+            bool foundCredentials = false;
+            while (getline(file, line)) {
+                size_t commaPos = manualFind(line, ',');
+                if (commaPos == string::npos) {
+                    continue;
+                }
+                string storedUsername = line.substr(0, commaPos);
+                string storedPassword = line.substr(commaPos + 1);
+                storedUsername.erase(0, storedUsername.find_first_not_of(" \t\n\r"));
+                storedUsername.erase(storedUsername.find_last_not_of(" \t\n\r") + 1);
+                storedPassword.erase(0, storedPassword.find_first_not_of(" \t\n\r"));
+                storedPassword.erase(storedPassword.find_last_not_of(" \t\n\r") + 1);
+                if (username == storedUsername && password == storedPassword) {
+                    file.close();
+                    isLoggedIn = true;
+                    loadOrderHistory(ordersFilename);
+                    setColor(GREEN); cout << "Login successful! Welcome, " << username << ".\n"; resetColor();
+                    Sleep(1000);
+                    return true;
+                }
+            }
+            file.close();
+            attempts--;
+            setColor(RED); cout << "Invalid username or password.\n"; resetColor();
+            if (attempts > 0) {
+                cout << "Attempts remaining: " << attempts << "\n";
+                Sleep(1500); system("cls"); setColor(LIGHT_BLUE); cout << "\n=== Customer Login ===\n"; resetColor();
+            } else {
+                setColor(RED); cout << "Too many failed attempts. Returning to welcome menu.\n"; resetColor();
+                Sleep(2000);
+                return false;
+            }
+        }
+        return false;
+    }
+
+    void logout() {
+        if (isLoggedIn) {
+            isLoggedIn = false;
+            username = "";
+            password = "";
+            clearList(cartList);
+            cartCount = 0;
+            clearList(orderHistory);
+            orderHistoryCount = 0;
+            setColor(YELLOW); cout << "Customer logged out.\n"; resetColor();
+            cout << "\nPress any key to return to welcome menu...";
+            _getch();
+        } else {
+            setColor(RED); cout << "Not logged in.\n"; resetColor();
+        }
+    }
+
+    void searchProduct() {
+        system("cls");
+        setColor(LIGHT_BLUE); cout << "\n=== Search Product ===\n"; resetColor();
+        if (!globalProductList || globalProductList->getProductCount() == 0) {
+            setColor(RED); cout << "No products available to search.\n"; resetColor();
+            cout << "\nPress any key to return...";
+            _getch();
+            return;
+        }
+        cout << "Enter part of Product Name or Category to search: ";
+        string searchTerm;
+        getline(cin, searchTerm);
+        searchTerm.erase(0, searchTerm.find_first_not_of(" \t\n\r"));
+        searchTerm.erase(searchTerm.find_last_not_of(" \t\n\r") + 1);
+        if (searchTerm.empty()) {
+            setColor(RED); cout << "No input provided for search.\n"; resetColor();
+            cout << "\nPress any key to return...";
+            _getch();
+            return;
+        }
+        globalProductList->searchProduct(searchTerm);
+    }
+    void sortProducts() {
+        system("cls");
+        setColor(LIGHT_BLUE); cout << "\n=== Sort Products ===\n"; resetColor();
+        if (!globalProductList || globalProductList->getProductCount() == 0) {
+            setColor(RED); cout << "No products available to sort.\n"; resetColor();
+            cout << "\nPress any key to return...";
+            _getch();
+            return;
+        }
+        cout << "Sort Options:\n";
+        cout << "1. Sort by Category\n";
+        cout << "2. Sort by Product Name\n";
+        cout << "Enter choice (1-2, or 0 to cancel): ";
+        string input;
+        int choice;
+        getline(cin, input);
+        try {
+            size_t pos;
+            choice = custom_stoi(input, &pos);
+        } catch (...) {
+            setColor(RED); cout << "Invalid input. Please enter a number.\n"; resetColor();
+            cout << "\nPress any key to return...";
+            _getch();
+            return;
+        }
+        if (choice == 0) {
+            setColor(RED); cout << "Cancelled.\n"; resetColor();
+            cout << "\nPress any key to return...";
+            _getch();
+            return;
+        }
         if (choice == 1) {
-            printHeader("Admin Portal");
-            cout << "1. Login\n";
-            cout << "2. Register New Admin\n";
-            cout << "0. Back\n";
-            cout << "Enter choice: ";
-            int adminChoice = getIntegerInput();
-            BaseUser* currentUser = NULL;
-            if(adminChoice == 1) {
-                currentUser = userManager.login("admin");
-            } else if (adminChoice == 2) {
-                userManager.signUp("admin");
+            globalProductList->sortAndDisplayCategories();
+        } else if (choice == 2) {
+            globalProductList->sortAndDisplayProductNames();
+        } else {
+            setColor(RED); cout << "Invalid choice.\n"; resetColor();
+            cout << "\nPress any key to return...";
+            _getch();
+        }
+    }
+
+    void addProductToCart() {
+        system("cls");
+        setColor(LIGHT_BLUE); cout << "\n=== Add Product to Cart ===\n"; resetColor();
+        if (!isLoggedIn) {
+             setColor(RED); cout << "Please login first.\n"; _getch(); return;
+        }
+
+        Product* availableProducts = globalProductList->getSortedProductsArray("name", true);
+        int arrSize = globalProductList->getProductCount();
+
+        if (availableProducts == NULL || arrSize == 0) {
+            setColor(RED); cout << "No products available.\n"; resetColor();
+            _getch();
+            if (availableProducts) delete[] availableProducts;
+            return;
+        }
+        
+        setColor(GREEN); cout << "=== Available Products ===\n"; resetColor();
+        int maxNumLength = (int)string("No.").length();
+        int maxNameLength = (int)string("Name").length();
+        int maxPriceLength = (int)string("Price").length();
+        int maxCategoryLength = (int)string("Category").length();
+        int maxStockLength = (int)string("Stock").length();
+        for (int i = 0; i < arrSize; i++) {
+            maxNumLength = manualMax(maxNumLength, (int)intToString(i + 1).length());
+            maxNameLength = manualMax(maxNameLength, (int)availableProducts[i].name.length());
+            maxPriceLength = manualMax(maxPriceLength, (int)availableProducts[i].price.length());
+            maxCategoryLength = manualMax(maxCategoryLength, (int)availableProducts[i].category.length());
+            maxStockLength = manualMax(maxStockLength, (int)intToString(availableProducts[i].stock).length());
+        }
+        const int COLUMN_PADDING_SPACES = 2;
+        int numColWidth = maxNumLength + COLUMN_PADDING_SPACES;
+        int nameColWidth = maxNameLength + COLUMN_PADDING_SPACES;
+        int priceColWidth = maxPriceLength + COLUMN_PADDING_SPACES;
+        int categoryColWidth = maxCategoryLength + COLUMN_PADDING_SPACES;
+        int stockColWidth = maxStockLength + COLUMN_PADDING_SPACES + 2;
+        string headerLine = "+" + string(numColWidth, '-') + "+" + string(nameColWidth, '-') + "+" + string(priceColWidth, '-') + "+" + string(categoryColWidth, '-') + "+" + string(stockColWidth, '-') + "+";
+        cout << headerLine << endl;
+        cout << "|" << left << setw(numColWidth) << " No."
+             << "|" << left << setw(nameColWidth) << " Name"
+             << "|" << left << setw(priceColWidth) << " Price"
+             << "|" << left << setw(categoryColWidth) << " Category"
+             << "|" << left << setw(stockColWidth) << " Stock"
+             << "|" << endl;
+        cout << headerLine << endl;
+        for (int i = 0; i < arrSize; ++i) {
+            cout << "|" << left << setw(numColWidth) << (" " + intToString(i + 1));
+            cout << "|" << left << setw(nameColWidth) << (" " + availableProducts[i].name);
+            cout << "|" << left << setw(priceColWidth) << (" " + availableProducts[i].price);
+            cout << "|" << left << setw(categoryColWidth) << (" " + availableProducts[i].category);
+            string stockStr = intToString(availableProducts[i].stock);
+            cout << "|" << right << setw(stockColWidth - 2) << stockStr << "  |" << endl;
+        }
+        cout << headerLine << endl;
+
+        cout << "\nEnter product number to add (1-" << arrSize << ", or 0 to cancel): ";
+        string input;
+        int choice;
+        getline(cin, input);
+        try {
+            size_t pos;
+            choice = custom_stoi(input, &pos);
+        } catch(...) {
+            setColor(RED); cout << "Invalid input.\n"; resetColor();
+            delete[] availableProducts;
+            _getch(); return;
+        }
+        
+        if (choice >= 1 && choice <= arrSize) {
+            const Product& selectedProduct = availableProducts[choice - 1];
+            int q;
+            cout << "Enter Quantity (max 5, current stock: " << selectedProduct.stock << "): ";
+            string qtyInput;
+            getline(cin, qtyInput);
+            try {
+                size_t pos;
+                q = custom_stoi(qtyInput, &pos);
+                if (q <= 0 || q > 5) {
+                    setColor(RED); cout << "Invalid quantity (1-5).\n"; resetColor();
+                    delete[] availableProducts;
+                    _getch(); return;
+                }
+            } catch(...) {
+                setColor(RED); cout << "Invalid quantity.\n"; resetColor();
+                delete[] availableProducts;
+                _getch(); return;
             }
             
-            if(currentUser != NULL){
-                currentUser->showMenu();
-                delete currentUser;
-                currentUser = NULL;
+            if (selectedProduct.stock >= q) {
+                 OrderItem itemToAdd(selectedProduct.name, selectedProduct.price, selectedProduct.category, q, "");
+                 insertAtEnd(cartList, itemToAdd);
+                 cartCount++;
+                 setColor(GREEN); cout << "Added to cart!\n"; resetColor();
+            } else {
+                 setColor(RED); cout << "Insufficient stock.\n"; resetColor();
             }
-
-        } else if (choice == 2) {
-            printHeader("Customer Portal");
-            cout << "1. Login\n";
-            cout << "2. Register New Customer\n";
-            cout << "0. Back\n";
-            cout << "Enter choice: ";
-            int custChoice = getIntegerInput();
-            BaseUser* currentUser = NULL;
-            if(custChoice == 1) {
-                currentUser = userManager.login("customer");
-            } else if(custChoice == 2) {
-                userManager.signUp("customer");
-            }
-
-            if(currentUser != NULL){
-                currentUser->showMenu();
-                delete currentUser;
-                currentUser = NULL;
-            }
-
-        } else if (choice == 0) {
-            setColor(COLOR_SUCCESS);
-            cout << "Saving all data and exiting system. Goodbye!\n";
-            setColor(COLOR_DEFAULT);
         } else {
-            setColor(COLOR_ERROR);
-            cout << "Invalid choice. Please try again.\n";
-            setColor(COLOR_DEFAULT);
-            pressKeyToContinue();
+            if (choice != 0) setColor(RED); cout << "Invalid product choice.\n"; resetColor();
+        }
+        
+        delete[] availableProducts; 
+        _getch();
+    }
+    
+    void displayCart() {
+        system("cls");
+        setColor(LIGHT_BLUE); cout << "\n=== Your Cart ===\n"; resetColor();
+        if (!cartList) {
+            setColor(RED); cout << "Cart is empty.\n"; resetColor();
+            cout << "\nPress any key to return...";
+            _getch();
+            return;
+        }
+        int maxNumLength = (int)string("No.").length();
+        int maxNameLength = (int)string("Name").length();
+        int maxPriceLength = (int)string("Price").length();
+        int maxCategoryLength = (int)string("Category").length();
+        int maxQtyLength = (int)string("Qty.").length();
+        CustomerNode* temp = cartList;
+        int count = 0;
+        while (temp) {
+            count++;
+            maxNameLength = manualMax(maxNameLength, (int)temp->data.name.length());
+            maxPriceLength = manualMax(maxPriceLength, (int)temp->data.priceAtPurchase.length());
+            maxCategoryLength = manualMax(maxCategoryLength, (int)temp->data.category.length());
+            maxQtyLength = manualMax(maxQtyLength, (int)intToString(temp->data.quantity).length());
+            temp = temp->next;
+        }
+        maxNumLength = manualMax(maxNumLength, (int)intToString(count).length());
+
+        const int COLUMN_PADDING_SPACES = 2;
+        int numColWidth = maxNumLength + COLUMN_PADDING_SPACES;
+        int nameColWidth = maxNameLength + COLUMN_PADDING_SPACES;
+        int priceColWidth = maxPriceLength + COLUMN_PADDING_SPACES;
+        int categoryColWidth = maxCategoryLength + COLUMN_PADDING_SPACES;
+        int qtyColWidth = manualMax((int)string("Qty.").length(), maxQtyLength) + COLUMN_PADDING_SPACES + 2;
+        string headerLine = "+" + string(numColWidth, '-') + "+" + string(nameColWidth, '-') + "+" + string(priceColWidth, '-') + "+" + string(categoryColWidth, '-') + "+" + string(qtyColWidth, '-') + "+";
+        cout << headerLine << endl;
+        cout << "|" << left << setw(numColWidth) << " No."
+             << "|" << left << setw(nameColWidth) << " Name"
+             << "|" << left << setw(priceColWidth) << " Price"
+             << "|" << left << setw(categoryColWidth) << " Category"
+             << "|" << left << setw(qtyColWidth) << " Qty."
+             << "|" << endl;
+        cout << headerLine << endl;
+        int i = 1;
+        CustomerNode* displayCurrent = cartList;
+        while (displayCurrent) {
+            cout << "|" << left << setw(numColWidth) << (" " + intToString(i));
+            cout << "|" << left << setw(nameColWidth) << (" " + displayCurrent->data.name);
+            cout << "|" << left << setw(priceColWidth) << (" " + displayCurrent->data.priceAtPurchase);
+            cout << "|" << left << setw(categoryColWidth) << (" " + displayCurrent->data.category);
+            string qtyStr = intToString(displayCurrent->data.quantity);
+            cout << "|" << right << setw(qtyColWidth - 2) << qtyStr << "  |" << endl;
+            displayCurrent = displayCurrent->next;
+            i++;
+        }
+        cout << headerLine << endl;
+        cout << "\nPress any key to return...";
+        _getch();
+    }
+
+    void removeFromCart() {
+        system("cls");
+        setColor(LIGHT_BLUE); cout << "\n=== Remove from Cart ===\n"; resetColor();
+        if (!isLoggedIn) {
+            setColor(RED); cout << "Please login first.\n"; resetColor();
+            cout << "\nPress any key to return...";_getch();return;
+        }
+        if (!cartList) {
+            setColor(RED); cout << "Cart is empty. Nothing to remove.\n"; resetColor();
+            cout << "\nPress any key to return...";_getch();return;
+        }
+        displayCart();
+        cout << "\nEnter the number of the product to remove (1-" << cartCount << ", or 0 to cancel): ";
+        string input;
+        int choice;
+        getline(cin, input);
+        try {
+            size_t pos;
+            choice = custom_stoi(input, &pos);
+        } catch (...) {
+            setColor(RED); cout << "Invalid input. Please enter a number.\n"; resetColor();
+            cout << "\nPress any key to return...";_getch();return;
+        }
+        if (choice == 0) {
+            setColor(RED); cout << "Removal cancelled.\n"; resetColor();
+            cout << "\nPress any key to return...";_getch();return;
+        }
+        if (choice < 1 || choice > cartCount) {
+            setColor(RED); cout << "Product not found in cart.\n"; resetColor();
+            cout << "\nPress any key to return...";_getch();return;
+        }
+        CustomerNode* current = cartList;
+        CustomerNode* prev = NULL;
+        for (int i = 1; i < choice && current; i++) {
+            prev = current;
+            current = current->next;
+        }
+        if (!current) {
+            setColor(RED); cout << "Product not found in cart. (Internal error).\n"; resetColor();
+            cout << "\nPress any key to return...";_getch();return;
+        }
+        if (prev) {
+            prev->next = current->next;
+        } else {
+            cartList = current->next;
+        }
+        delete current;
+        cartCount--;
+        setColor(GREEN); cout << "Product removed from cart successfully!\n"; resetColor();
+        cout << "\nPress any key to return...";_getch();
+    }
+
+    void order(const string& productsFilename, const string& ordersFilename) {
+        system("cls");
+        setColor(LIGHT_BLUE); cout << "\n=== Place Order ===\n"; resetColor();
+        if (!isLoggedIn || !cartList) {
+            setColor(RED); cout << "Please login or add items to cart first.\n"; resetColor();
+            _getch(); return;
         }
 
-    } while (choice != 0);
+        setColor(YELLOW); cout << "Items in your cart:\n"; resetColor();
+        displayCart();
+        
+        cout << "\nConfirm your order? (1 for Yes, 0 for No): ";
+        string input;
+        int choice;
+        getline(cin, input);
+        try{
+            size_t pos;
+            choice = custom_stoi(input, &pos);
+        } catch(...) {
+            setColor(RED); cout << "Invalid input.\n"; resetColor(); _getch(); return;
+        }
+        
+        if (choice == 1) {
+            ofstream file(ordersFilename.c_str(), ios::app);
+            if (!file) {
+                setColor(RED); cout << "Failed to open orders file.\n"; resetColor();
+                _getch(); return;
+            }
 
-    saveProductCatalogToFile(productCatalog);
-    Logger::getInstance().logInfo("System Shutdown.");
+            time_t now = time(0);
+            char time_buffer[50];
+            strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d_%H:%M:%S", localtime(&now));
+            string dt = time_buffer;
+
+            float totalOrderAmount = 0.0;
+            system("cls");
+            setColor(LIGHT_BLUE); cout << "\n=== Order Invoice ===\n"; resetColor();
+            cout << "Date: " << dt << endl;
+            cout << "Customer: " << username << endl;
+            
+            CustomerNode* current = cartList;
+            while (current) {
+                file << username << "\t" << dt << "\t" << current->data.name << "\t"
+                     << current->data.quantity << "\t" << current->data.priceAtPurchase << endl;
+                
+                globalProductList->updateProductStock(current->data.name, -current->data.quantity, productsFilename);
+                
+                OrderItem orderedItem = current->data;
+                orderedItem.timestamp = dt;
+                insertAtEnd(orderHistory, orderedItem);
+                orderHistoryCount++;
+                
+                current = current->next;
+            }
+            file.close();
+            
+            clearList(cartList);
+            
+            setColor(GREEN); cout << "Order placed successfully! Thank you.\n"; resetColor();
+            _getch();
+        } else {
+            setColor(RED); cout << "Order cancelled.\n"; resetColor();
+            _getch();
+        }
+    }
+    
+    void viewOrderHistory() {
+        system("cls");
+        setColor(LIGHT_BLUE); cout << "\n=== Purchase Histories ===\n"; resetColor();
+        if (!isLoggedIn) {
+            setColor(RED); cout << "Please login first to view purchase history.\n"; resetColor();
+            cout << "\nPress any key to return...";_getch();return;
+        }
+        if (!orderHistory) {
+            setColor(RED); cout << "No purchase history available.\n"; resetColor();
+            cout << "\nPress any key to return...";_getch();return;
+        }
+        CustomerNode* current = orderHistory;
+        int maxNumLength = (int)string("No.").length();
+        int maxNameLength = (int)string("Product").length();
+        int maxQtyLength = (int)string("Qty").length();
+        int maxPriceLength = (int)string("Price").length();
+        int maxTimeLength = (int)string("Timestamp").length();
+        CustomerNode* temp = orderHistory;
+        int count = 0;
+        while (temp) {
+            count++;
+            maxNameLength = manualMax(maxNameLength, (int)temp->data.name.length());
+            maxQtyLength = manualMax(maxQtyLength, (int)intToString(temp->data.quantity).length());
+            maxPriceLength = manualMax(maxPriceLength, (int)temp->data.priceAtPurchase.length());
+            maxTimeLength = manualMax(maxTimeLength, (int)temp->data.timestamp.length());
+            temp = temp->next;
+        }
+        maxNumLength = manualMax(maxNumLength, (int)intToString(count).length());
+
+        const int COLUMN_PADDING_SPACES = 2;
+        int numColWidth = maxNumLength + COLUMN_PADDING_SPACES;
+        int nameColWidth = maxNameLength + COLUMN_PADDING_SPACES;
+        int qtyColWidth = manualMax((int)string("Qty").length(), maxQtyLength) + COLUMN_PADDING_SPACES + 2;
+        int priceColWidth = maxPriceLength + COLUMN_PADDING_SPACES;
+        int timeColWidth = manualMax((int)string("Timestamp").length(), maxTimeLength) + COLUMN_PADDING_SPACES;
+        string headerLine = "+" + string(numColWidth, '-') + "+" + string(nameColWidth, '-') + "+" + string(priceColWidth, '-') + "+" + string(qtyColWidth, '-') + "+" + string(timeColWidth, '-') + "+";
+        cout << headerLine << endl;
+        cout << "|" << left << setw(numColWidth) << " No."
+             << "|" << left << setw(nameColWidth) << " Product"
+             << "|" << left << setw(priceColWidth) << " Price"
+             << "|" << left << setw(qtyColWidth) << " Qty"
+             << "|" << left << setw(timeColWidth) << " Timestamp"
+             << "|" << endl;
+        cout << headerLine << endl;
+        int i = 1;
+        current = orderHistory;
+        while (current) {
+            cout << "|" << left << setw(numColWidth) << (" " + intToString(i));
+            cout << "|" << left << setw(nameColWidth) << (" " + current->data.name);
+            cout << "|" << left << setw(priceColWidth) << (" " + current->data.priceAtPurchase);
+            string qtyStr = intToString(current->data.quantity);
+            cout << "|" << right << setw(qtyColWidth - 2) << qtyStr << "  |";
+            cout << left << setw(timeColWidth) << (" " + current->data.timestamp);
+            cout << "|" << endl;
+            current = current->next;
+            i++;
+        }
+        cout << headerLine << endl;
+        cout << "\nPress any key to return...";
+        _getch();
+    }
+    
+    bool isUserLoggedIn() const { return isLoggedIn; }
+};
+
+bool adminLogin(const string& staffFilename);
+void adminRegister(const string& staffFilename);
+void displayAdminMenu(ProductList& list, const string& categoriesFilename, const string& productsFilename, const string& ordersFilename);
+void displayCustomerMenu(Customer& cust, const string& productsFilename, const string& ordersFilename);
+bool authenticateUser(const string& username, const string& password, const string& filename);
+
+int main() {
+    ProductList globalProductList;
+    Customer customerApp(&globalProductList);
+    
+    // Updated filenames as per your request
+    string categoriesFilename = "categories.txt";
+    string productsFilename = "products.txt"; 
+    string staffFilename = "admin.txt";
+    string loginFilename = "customer.txt";
+    string ordersFilename = "purchase_history.txt";
+
+    while (true) {
+        system("cls");
+        setColor(LIGHT_BLUE); cout << "\n==== Welcome to The Furnish Shop ====\n"; resetColor();
+        cout << "1. Admin Login/Registration\n";
+        cout << "2. Customer Login/Registration\n";
+        cout << "3. Exit Program\n";
+        cout << "Enter your choice (1-3): ";
+        
+        string input;
+        int initialChoice;
+        getline(cin, input);
+        try {
+            size_t pos;
+            initialChoice = custom_stoi(input, &pos);
+        } catch (...) {
+            setColor(RED); cout << "Invalid input.\n"; resetColor();
+            Sleep(1500);
+            continue;
+        }
+
+        switch (initialChoice) {
+            case 1: { 
+                bool adminAccessGranted = false;
+                while (!adminAccessGranted) {
+                    system("cls");
+                    setColor(LIGHT_BLUE); cout << "\n=== Admin Access ===\n"; resetColor();
+                    cout << "1. Admin Register\n";
+                    cout << "2. Admin Login\n";
+                    cout << "3. Back to Main Menu\n";
+                    cout << "Enter choice (1-3): ";
+                    string adminInput;
+                    int adminChoice;
+                    getline(cin, adminInput);
+                     try {
+                        size_t pos;
+                        adminChoice = custom_stoi(adminInput, &pos);
+                    } catch (...) {
+                        setColor(RED); cout << "Invalid input.\n"; Sleep(1500); continue;
+                    }
+
+                    switch(adminChoice) {
+                        case 1: adminRegister(staffFilename); break;
+                        case 2:
+                             if (adminLogin(staffFilename)) {
+                                adminAccessGranted = true;
+                                try {
+                                    cout << "Loading data...\n";
+                                    globalProductList.loadCategories(categoriesFilename);
+                                    globalProductList.loadFromFile(productsFilename);
+                                    showLoading();
+                                    displayAdminMenu(globalProductList, categoriesFilename, productsFilename, ordersFilename);
+                                } catch (const runtime_error& e) {
+                                     cerr << "Fatal Error during data loading: " << e.what() << endl;
+                                    _getch(); return 1;
+                                }
+                            }
+                            break;
+                        case 3: adminAccessGranted = true; break;
+                        default: setColor(RED); cout << "Invalid choice.\n"; Sleep(1500); break;
+                    }
+                }
+                break;
+            }
+            case 2: {
+                 bool customerAccessGranted = false;
+                 while (!customerAccessGranted) {
+                    system("cls");
+                    setColor(LIGHT_BLUE); cout << "\n=== Customer Access ===\n"; resetColor();
+                    cout << "1. Customer Register\n";
+                    cout << "2. Customer Login\n";
+                    cout << "3. Back to Main Menu\n";
+                    cout << "Enter choice (1-3): ";
+                    string custInput;
+                    int custChoice;
+                     getline(cin, custInput);
+                     try {
+                        size_t pos;
+                        custChoice = custom_stoi(custInput, &pos);
+                    } catch (...) {
+                        setColor(RED); cout << "Invalid input.\n"; Sleep(1500); continue;
+                    }
+                    
+                    switch(custChoice) {
+                        case 1: customerApp.registerCustomer(loginFilename); break;
+                        case 2:
+                            if (customerApp.login(loginFilename, ordersFilename)) {
+                                customerAccessGranted = true;
+                                 try {
+                                    cout << "Loading products...\n";
+                                    globalProductList.loadCategories(categoriesFilename);
+                                    globalProductList.loadFromFile(productsFilename);
+                                    showLoading();
+                                    displayCustomerMenu(customerApp, productsFilename, ordersFilename);
+                                } catch (const runtime_error& e) {
+                                     cerr << "Fatal Error during data loading: " << e.what() << endl;
+                                    _getch(); return 1;
+                                }
+                            }
+                            break;
+                        case 3: customerAccessGranted = true; break;
+                        default: setColor(RED); cout << "Invalid choice.\n"; Sleep(1500); break;
+                    }
+                 }
+                 break;
+            }
+            case 3:
+                setColor(RED); cout << "Exiting The Furnish Shop program. Goodbye!\n"; resetColor();
+                Sleep(1000);
+                return 0;
+            default:
+                setColor(RED); cout << "Invalid choice.\n"; resetColor();
+                Sleep(1000);
+                break;
+        }
+    }
     return 0;
 }
 
+bool authenticateUser(const string& username, const string& password, const string& filename) {
+    ifstream file(filename.c_str());
+    if (!file) {
+        return false;
+    }
+    string line;
+    while (getline(file, line)) {
+        size_t first = line.find_first_not_of(" \t\n\r");
+        if (string::npos != first) {
+            size_t last = line.find_last_not_of(" \t\n\r");
+            line = line.substr(first, (last - first + 1));
+        } else {
+            line = "";
+        }
+        if (line.empty()) continue;
+        size_t commaPos = manualFind(line, ',');
+        if (commaPos == string::npos) {
+            continue;
+        }
+        string storedUsername = line.substr(0, commaPos);
+        string storedPassword = line.substr(commaPos + 1);
+        storedUsername.erase(0, storedUsername.find_first_not_of(" \t\n\r"));
+        storedUsername.erase(storedUsername.find_last_not_of(" \t\n\r") + 1);
+        storedPassword.erase(0, storedPassword.find_first_not_of(" \t\n\r"));
+        storedPassword.erase(storedPassword.find_last_not_of(" \t\n\r") + 1);
+        if (username == storedUsername && password == storedPassword) {
+            file.close();
+            return true;
+        }
+    }
+    file.close();
+    return false;
+}
 
+bool adminLogin(const string& staffFilename) {
+    system("cls");
+    string username, password;
+    int attempts = 3;
+    setColor(LIGHT_BLUE); cout << "\n=== Admin Login ===\n"; resetColor();
+    while (attempts > 0) {
+        cout << "Enter username: ";
+        getline(cin, username);
+        username.erase(0, username.find_first_not_of(" \t\n\r"));
+        username.erase(username.find_last_not_of(" \t\n\r") + 1);
+        if (username.empty()) {
+            setColor(RED); cout << "Username cannot be empty.\n"; resetColor();
+            attempts--;
+            if (attempts > 0) {
+                cout << "Attempts remaining: " << attempts << "\n";
+                Sleep(1000); system("cls"); setColor(LIGHT_BLUE); cout << "\n=== Admin Login ===\n"; resetColor();
+            }
+            continue;
+        }
+        cout << "Enter password: ";
+        password = getPassword();
+        if (password.empty()) {
+            setColor(RED); cout << "Password cannot be empty.\n"; resetColor();
+            attempts--;
+            if (attempts > 0) {
+                cout << "Attempts remaining: " << attempts << "\n";
+                Sleep(500); system("cls"); setColor(LIGHT_BLUE); cout << "\n=== Admin Login ===\n"; resetColor();
+            }
+            continue;
+        }
+        if (authenticateUser(username, password, staffFilename)) {
+            return true;
+        } else {
+            attempts--;
+            setColor(RED); cout << "Invalid credentials.\n"; resetColor();
+            if (attempts > 0) {
+                cout << "Attempts remaining: " << attempts << "\n";
+                Sleep(1500); system("cls"); setColor(LIGHT_BLUE); cout << "\n=== Admin Login ===\n"; resetColor();
+            }
+        }
+    }
+    setColor(RED); cout << "Too many failed attempts. Returning to main menu.\n"; resetColor();
+    Sleep(2000);
+    return false;
+}
+
+void adminRegister(const string& staffFilename) {
+    system("cls");
+    string username, password;
+    setColor(LIGHT_BLUE); cout << "\n=== Admin Registration ===\n"; resetColor();
+    bool fileExistsInitially = ifstream(staffFilename.c_str()).good();
+    cout << "Enter desired username: ";
+    getline(cin, username);
+    username.erase(0, username.find_first_not_of(" \t\n\r"));
+    username.erase(username.find_last_not_of(" \t\n\r") + 1);
+    if (username.empty()) {
+        setColor(RED); cout << "Username cannot be empty.\n"; resetColor();
+        cout << "\nPress any key to return...";
+        _getch();
+        return;
+    }
+    if (manualFind(username, ',') != string::npos) {
+        setColor(RED); cout << "Username cannot contain commas.\n"; resetColor();
+        cout << "\nPress any key to return...";
+        _getch();
+        return;
+    }
+    if (fileExistsInitially && manualFileContains(staffFilename, username)) {
+        setColor(RED); cout << "Username '" << username << "' already exists (case-insensitive match).\n"; resetColor();
+        cout << "\nPress any key to return...";
+        _getch();
+        return;
+    }
+    cout << "Enter desired password: ";
+    password = getPassword();
+    if (password.empty()) {
+        setColor(RED); cout << "Password cannot be empty.\n"; resetColor();
+        cout << "\nPress any key to return...";
+        _getch();
+        return;
+    }
+    if (manualFind(password, ',') != string::npos) {
+        setColor(RED); cout << "Password cannot contain commas.\n"; resetColor();
+        cout << "\nPress any key to return...";
+        _getch();
+        return;
+    }
+    ofstream outFile(staffFilename.c_str(), ios::app);
+    if (!outFile) {
+        cerr << "Error: Could not open staff file for writing: " << staffFilename << endl;
+        setColor(RED); cout << "Registration failed due to file error.\n"; resetColor();
+    } else {
+        outFile << username << "," << password << endl;
+        outFile.close();
+        setColor(GREEN); cout << "Admin user '" << username << "' registered successfully.\n"; resetColor();
+    }
+    cout << "\nPress any key to return...";
+    _getch();
+}
+
+void displayAdminMenu(ProductList& list, const string& categoriesFilename, const string& productsFilename, const string& ordersFilename) {
+    bool adminLoggedIn = true;
+    while (adminLoggedIn) {
+        system("cls");
+        setColor(LIGHT_BLUE); cout << "\n=== Admin Menu ===\n"; resetColor();
+        cout << "1. View Categories (Sorted)\n";
+        cout << "2. View Products (Sorted by Name)\n";
+        cout << "3. Add New Category\n";
+        cout << "4. Add New Product\n";
+        cout << "5. Delete Category\n";
+        cout << "6. Delete Product\n";
+        cout << "7. Search Product (by Name or Category)\n";
+        cout << "8. Search Category (by Name)\n";
+        cout << "9. Edit Product Stock\n";
+        cout << "10. Logout\n";
+        cout << "Enter your choice (1-10): ";
+        string input;
+        int choice;
+        getline(cin, input);
+        try {
+            size_t pos;
+            choice = custom_stoi(input, &pos);
+        } catch (...) {
+            setColor(RED); cout << "Invalid input. Please enter a number.\n"; resetColor();
+            Sleep(1500);
+            continue;
+        }
+
+        switch (choice) {
+            case 1:
+                list.sortAndDisplayCategories();
+                break;
+            case 2:
+                list.sortAndDisplayProductNames();
+                break;
+            case 3:
+                list.addCategory(categoriesFilename);
+                break;
+            case 4:
+                list.addProduct(productsFilename);
+                break;
+            case 5:
+                list.deleteCategory(categoriesFilename, productsFilename);
+                cout << "\nPress any key to return to menu...";
+                _getch();
+                break;
+            case 6:
+                list.deleteProduct(productsFilename, ordersFilename);
+                cout << "\nPress any key to return to menu...";
+                _getch();
+                break;
+            case 7: {
+                system("cls");
+                setColor(LIGHT_BLUE); cout << "\n=== Search Product ===\n"; resetColor();
+                string searchTerm;
+                cout << "Enter product name or category to search: ";
+                getline(cin, searchTerm);
+                list.searchProduct(searchTerm);
+                break;
+            }
+            case 8: {
+                system("cls");
+                setColor(LIGHT_BLUE); cout << "\n=== Search Category ===\n"; resetColor();
+                string searchTerm;
+                cout << "Enter category name to search: ";
+                getline(cin, searchTerm);
+                list.searchCategory(searchTerm);
+                break;
+            }
+            case 9:
+                list.editProductStock(productsFilename);
+                break;
+            case 10:
+                adminLoggedIn = false;
+                setColor(YELLOW); cout << "Admin logged out. Returning to main menu.\n"; resetColor();
+                Sleep(1500);
+                break;
+            default:
+                setColor(RED); cout << "Invalid choice. Please enter a number from 1 to 10.\n"; resetColor();
+                Sleep(1500);
+                break;
+        }
+    }
+}
+
+void displayCustomerMenu(Customer& cust, const string& productsFilename, const string& ordersFilename) {
+    bool customerLoggedIn = true;
+    while (customerLoggedIn) {
+        system("cls");
+        setColor(LIGHT_BLUE); cout << "\n=== Customer Menu ===\n"; resetColor();
+        cout << "1. Add Product to Cart\n";
+        cout << "2. View Cart\n";
+        cout << "3. Search Product\n";
+        cout << "4. Sort Products (by Category or Name)\n";
+        cout << "5. Remove from Cart\n";
+        cout << "6. Place Order\n";
+        cout << "7. View Order History\n";
+        cout << "8. Logout\n";
+        cout << "Enter your choice (1-8): ";
+        string input;
+        int choice;
+        getline(cin, input);
+        try {
+            size_t pos;
+            choice = custom_stoi(input, &pos);
+        } catch (...) {
+            setColor(RED); cout << "Invalid input. Please enter a number.\n"; resetColor();
+            Sleep(1500);
+            continue;
+        }
+        
+        switch (choice) {
+            case 1: cust.addProductToCart(); break;
+            case 2: cust.displayCart(); break;
+            case 3: cust.searchProduct(); break;
+            case 4: cust.sortProducts(); break;
+            case 5: cust.removeFromCart(); break;
+            case 6: cust.order(productsFilename, ordersFilename); break;
+            case 7: cust.viewOrderHistory(); break;
+            case 8:
+                customerLoggedIn = false;
+                cust.logout();
+                break;
+            default:
+                setColor(RED); cout << "Invalid choice. Please enter 1 to 8.\n"; resetColor();
+                Sleep(1500);
+                break;
+        }
+    }
+}
