@@ -1,5 +1,6 @@
-Kitchen
-Living Room
-Bedroom
+Air Conditioners
+Audio/Video Appliances
+Cleaning Appliances
+Kitchen Appliances
+Refrigeration Appliances
 Uncategorized
-huawei
